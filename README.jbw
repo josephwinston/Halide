@@ -1,0 +1,15 @@
+port install clang-.31
+port install ocaml
+port install ocaml-batteries-devel (build fails but adds
+ ocaml-bin-prot @108.00.02_1 (active)
+  ocaml-camomile @0.8.3_1 (active)
+  ocaml-findlib @1.3.3_2 (active)
+  ocaml-ocamlnet @3.6_1 (active)
+  ocaml-ounit @1.1.2_1 (active)
+  ocaml-pcre @7.0.2_0 (active)
+  ocaml-sexplib @108.00.02_1 (active)
+  ocaml-type-conv @108.00.02_1 (active)
+  ocaml-zip @1.04_1 (active)
+)
+
+
