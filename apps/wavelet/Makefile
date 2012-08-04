@@ -15,7 +15,7 @@ $(HL_MODULES): wavelet
 	./wavelet
 
 %.o: %.bc
-	cat $< | opt-mp-4.7 -O3 | llc-mp-4.7 -O3 -filetype=obj -o=$@
+	cat $< | opt-mp-3.1 -O3 | llc-mp-3.1 -O3 -filetype=obj -o=$@
 
 filter.o: filter.cpp $(HL_MODULES:%.bc=%.o)
 	$(GXX) -std=c++0x -O3 -c filter.cpp

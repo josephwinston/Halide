@@ -19,7 +19,7 @@ curved.bc: camera_pipe
 	./camera_pipe 8 0 # 8-bit output,
 
 curved.o: curved.bc
-	cat curved.bc | opt-mp-4.7 -O3 | llc-mp-4.7 -O3 -filetype=obj > curved.o
+	cat curved.bc | opt-mp-3.1 -O3 | llc-mp-3.1 -O3 -filetype=obj > curved.o
 
 process: process.cpp curved.o
 	$(GXX) -std=c++0x -Wall -O3 process.cpp curved.o -o process -lpthread -ldl $(CUDA_LFLAGS) $(PNGFLAGS)
