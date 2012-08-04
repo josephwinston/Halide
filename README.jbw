@@ -1,4 +1,5 @@
-port install clang-.31
+port install gcc47
+port install clang-3.1 
 port install ocaml
 port install ocaml-batteries-devel (build fails but adds
  ocaml-bin-prot @108.00.02_1 (active)
