@@ -9,7 +9,7 @@ all: filter
 
 wavelet: ../../cpp_bindings/ wavelet.cpp
 	$(MAKE) -C ../../cpp_bindings libHalide.a
-	$(GXX) wavelet.cpp -I ../../cpp_bindings/ ../../cpp_bindings/Halide.a  -std=c++0x -o wavelet  -lpthread -ldl
+	$(GXX) wavelet.cpp -I ../../cpp_bindings/ ../../cpp_bindings/Halide.a  -std=c++0x -o wavelet -lpthread -ldl
 
 $(HL_MODULES): wavelet 
 	./wavelet
@@ -18,10 +18,10 @@ $(HL_MODULES): wavelet
 	cat $< | opt-mp-3.1 -O3 | llc-mp-3.1 -O3 -filetype=obj -o=$@
 
 filter.o: filter.cpp $(HL_MODULES:%.bc=%.o)
-	$(GXX) -std=c++0x -O3 -c filter.cpp
+	$(GXX) -std=c++0x -O3 -c filter.cpp -I/opt/local/include
 
 filter: filter.o $(HL_MODULES:%.bc=%.o)
-	$(GXX) filter.o $(HL_MODULES:%.bc=%.o) -lpng -o filter -pthread
+	$(GXX) filter.o $(HL_MODULES:%.bc=%.o) -L/opt/local/lib -lpng -o filter -pthread
 
 clean:
 	rm -f wavelet filter filter.o $(HL_MODULES) $(HL_MODULES:%.bc=%.o) $(HL_MODULES:%.bc=%.h) *.lowered*
