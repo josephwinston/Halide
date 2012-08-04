@@ -11,7 +11,7 @@
 // ImageStack -load ../pics/dog1.jpg -plugin ./plugin.so -help foo -foo -display
 
 
-// llc -O3 test.bc
+// llc-mp-4.7 -O3 test.bc
 // g++ -DNAME="myName" -DHELP="Help string" -DNUM_POPPED=2 -c test_plugin.cpp -I ../ImageStack/src
 // ld -dylib test_plugin.o test.s 
 //

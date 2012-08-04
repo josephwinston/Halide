@@ -1,8 +1,8 @@
 // Compile the halide module like so:
-// make -C ../../../FImage/cpp_bindings/ FImage.a && g++-4.6 -std=c++0x halide_blur.cpp -I ../../../FImage/cpp_bindings/ ../../../FImage/cpp_bindings/FImage.a && ./a.out && opt -O3 -always-inline halide_blur.bc | llc -filetype=obj > halide_blur.o
+// make -C ../../../FImage/cpp_bindings/ FImage.a && g++-mp-4.6 -std=c++0x halide_blur.cpp -I ../../../FImage/cpp_bindings/ ../../../FImage/cpp_bindings/FImage.a && ./a.out && optapps/blur/test.cp -O3 -always-inline halide_blur.bc | llcapps/blur/test.cp -filetype=obj > halide_blur.o
 
 // Then compile this file like so:
-// g++-4.6 -Wall -ffast-math -O3 -fopenmp test.cpp halide_blur.o
+// g++-mp-4.6 -Wall -ffast-math -O3 -fopenmp test.cpp halide_blur.o
 
 #include <emmintrin.h>
 #include <math.h>

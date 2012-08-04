@@ -52,7 +52,7 @@ CAMLprim value compile_module_to_string(LLVMModuleRef modref) {
     LLVMInitializePTXAsmPrinter();
 
     // DISABLED - hooked in here to force PrintBeforeAll option - seems to be the only way?
-    /*char* argv[] = { "llc", "-print-before-all" };*/
+    /*char* argv[] = { "llc-mp-4.7", "-print-before-all" };*/
     /*int argc = sizeof(argv)/sizeof(char*);*/
     /*cl::ParseCommandLineOptions(argc, argv, "Halide PTX internal compiler\n");*/
 

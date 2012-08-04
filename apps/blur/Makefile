@@ -1,11 +1,11 @@
-ifneq ($(shell env -i command -v g++-4.7),)
-GXX ?= g++-4.7
+ifneq ($(shell env -i command -v g++-mp-4.7),)
+GXX ?= g++-mp-4.7
 endif
-GXX ?= g++-4.6
+GXX ?= g++-mp-4.6
 
 LLVM_ROOT=../../llvm/Release+Asserts
-LLC=$(LLVM_ROOT)/bin/llc
-OPT=$(LLVM_ROOT)/bin/opt
+LLC=$(LLVM_ROOT)/bin/llc-mp-4.7
+OPT=$(LLVM_ROOT)/bin/opt-mp-4.7
 PNGFLAGS=$(shell libpng-config --ldflags) $(shell libpng-config --cflags)
 
 halide_blur: ../../cpp_bindings/ ../../src/ halide_blur.cpp

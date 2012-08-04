@@ -16,7 +16,7 @@ And has bugs which require manual patches of the output LLVM bitcode:
 
 All that said, this actually generates PTX once patched with:
 
-    llc -O0 -march=ptx32 -o=/dev/stdout < test_simt.ll > test_simt.ptx
+    llc-mp-4.7 -O0 -march=ptx32 -o=/dev/stdout < test_simt.ll > test_simt.ptx
 
 and compiles with:
 

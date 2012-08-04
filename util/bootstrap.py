@@ -32,12 +32,12 @@ def check_llvm():
         return False
 
 
-# Test for ocaml 3.12.*
-status('Testing for OCaml 3.12.*')
+# Test for ocaml 4.0.*
+status('Testing for OCaml 4.0.*')
 from pbs import ocaml, ocamlbuild
 ver = ocaml('-version')
 print ver
-assert '3.12' in ver
+assert '4.0' in ver
 print '...OK!'
 
 # Submodule update/init

@@ -5,7 +5,7 @@ open Schedule
 (*
   Compile to PTX with:
   
-    llc -O0 -march=ptx64 test_hello_ptx.bc -o=test_hello_ptx.ptx
+    llc-mp-4.7 -O0 -march=ptx64 test_hello_ptx.bc -o=test_hello_ptx.ptx
 *)
 
 let _ =

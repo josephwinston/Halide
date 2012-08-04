@@ -2,9 +2,9 @@ OCAMLBUILD=ocamlbuild -use-ocamlfind
 BUILD_CMD=${OCAMLBUILD} ${OCAMLBUILDFLAGS} 
 
 LLVM_PATH=../llvm/Release+Asserts/bin
-LLC=${LLVM_PATH}/llc
-CLANG=${LLVM_PATH}/clang
-CLANGPP=${LLVM_PATH}/clang++
+LLC=${LLVM_PATH}/llc-mp-4.7
+CLANG=${LLVM_PATH}/clang-mp-4.7
+CLANGPP=${LLVM_PATH}/clang++-mp-4.7
 
 CUDA_PATH=/usr/local/cuda
 CUDA_LDFLAGS=-L${CUDA_PATH}/lib -lcuda

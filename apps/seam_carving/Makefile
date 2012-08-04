@@ -1,7 +1,7 @@
-ifneq ($(shell env -i command -v g++-4.7),)
-GXX ?= g++-4.7
+ifneq ($(shell env -i command -v g++-mp-4.7),)
+GXX ?= g++-mp-4.7
 endif
-GXX ?= g++-4.6
+GXX ?= g++-mp-4.6
 
 PNGFLAGS=$(shell libpng-config --ldflags) $(shell libpng-config --cflags)
 ifeq ($(HL_TARGET),ptx)
@@ -21,7 +21,7 @@ seam_carving.bc: seam_carving
 	./seam_carving $(SCHEDULE)
 
 seam_carving.o: seam_carving.bc
-	cat seam_carving.bc | opt -O3 | llc -O3 -filetype=obj -o seam_carving.o
+	cat seam_carving.bc | opt-mp-4.7 -O3 | llc-mp-4.7 -O3 -filetype=obj -o seam_carving.o
 
 process: process.cpp seam_carving.o ../Util.h ../png.h
 	$(GXX) -std=c++0x -Wall -O3 process.cpp seam_carving.o -o process -lpthread -ldl $(PNGFLAGS) $(CUDA_LFLAGS)

@@ -1,7 +1,7 @@
-ifneq ($(shell env -i command -v g++-4.7),)
-GXX ?= g++-4.7
+ifneq ($(shell env -i command -v g++-mp-4.7),)
+GXX ?= g++-mp-4.7
 endif
-GXX ?= g++-4.6
+GXX ?= g++-mp-4.6
 
 HL_MODULES = daubechies_x.bc inverse_daubechies_x.bc haar_x.bc inverse_haar_x.bc
 
@@ -15,7 +15,7 @@ $(HL_MODULES): wavelet
 	./wavelet
 
 %.o: %.bc
-	cat $< | opt -O3 | llc -O3 -filetype=obj -o=$@
+	cat $< | opt-mp-4.7 -O3 | llc-mp-4.7 -O3 -filetype=obj -o=$@
 
 filter.o: filter.cpp $(HL_MODULES:%.bc=%.o)
 	$(GXX) -std=c++0x -O3 -c filter.cpp

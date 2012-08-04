@@ -21,12 +21,12 @@ def remove(filename):
 
 proj_root = os.path.join('..', '..')
 llvm_path = os.path.join(proj_root, 'llvm', 'Release+Asserts', 'bin')
-llc = Command(os.path.join(llvm_path, 'llc'))
-clang = Command(os.path.join(llvm_path, 'clang++'))
+llc = Command(os.path.join(llvm_path, 'llc-mp-4.7'))
+clang = Command(os.path.join(llvm_path, 'clang++-mp-4.7'))
 imagestack = Command(os.path.join(proj_root, 'ImageStack', 'bin', 'ImageStack'))
 
 cxx = None
-gcc_versions = [which('g++-4.7'),which('g++-4.6')]
+gcc_versions = [which('g++-mp-4.7'),which('g++-mp-4.6')]
 for gcc in gcc_versions:
     cxx = Command(gcc)
     try:
@@ -35,7 +35,7 @@ for gcc in gcc_versions:
         continue
     break
 if not cxx:
-    print 'Halide requires g++-4.6 or g++-4.7 to be in the path.'
+    print 'Halide requires g++-mp-4.6 or g++-mp-4.7 to be in the path.'
     sys.exit(-1)
 
 platform = sys.platform.lower()
