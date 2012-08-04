@@ -81,4 +81,4 @@ print ocamlbuild('-use-ocamlfind', 'halide.cmxa')
 chdir('..')
 
 status('Building C++ bindings')
-print make('-C', 'cpp_bindings', '-j1') # can be flakey with first parallel build on SSD
+print make('-C', 'cpp_bindings', '-j12') # can be flakey with first parallel build on SSD

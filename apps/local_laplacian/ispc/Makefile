@@ -1,5 +1,5 @@
 GXX = g++-mp-4.6
-ifneq ($(shell env -i command -v g++-mp-4.7),)
+ifneq ($(shell env command -v g++-mp-4.7),)
 GXX = g++-mp-4.7
 endif
 
