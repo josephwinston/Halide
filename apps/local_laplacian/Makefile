@@ -4,8 +4,8 @@ endif
 GXX ?= g++-mp-4.6
 
 LLVM_ROOT=../../llvm/Release+Asserts
-LLC=$(LLVM_ROOT)/bin/llc-mp-3.1
-OPT=$(LLVM_ROOT)/bin/opt-mp-3.1
+LLC=$(LLVM_ROOT)/bin/llc
+OPT=$(LLVM_ROOT)/bin/opt
 
 PNGFLAGS=$(shell libpng-config --ldflags) $(shell libpng-config --cflags)
 ifeq ($(HL_TARGET),ptx)
