@@ -146,9 +146,9 @@ Func blur(Func image, const float sigma) {
 }
 
 int main(int argc, char **argv) {
-  
-  if (argc < 2) {
-      printf("Usage: ./halide_snake blood_cells.png max_iterations\n");
+
+  if (argc < 3) {
+      printf("Usage: ./halide_snake blood_cells.png out.pgn max_iterations\n");
       return 0;
   }
 
@@ -156,6 +156,7 @@ int main(int argc, char **argv) {
   const float mu = 0.2f / timestep;
   const int iter_inner = 1; // 5;
   const int iter_outer = argc > 3 ? atoi(argv[3]) : 1000;
+  
   const float lambda = 6.0f; //6.0;
   float alpha = 1.5f;
   const float epsilon = 1.5;
