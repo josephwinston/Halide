@@ -10,11 +10,10 @@ namespace Halide {
       public:
         MLVal mlval;
         unsigned char bits;
-        enum {FLOAT = 0, INT = 1, UINT = 2, ULONG = 3} code;
+        enum {FLOAT = 0, INT = 1, UINT = 2} code;
         bool isInt() {return code == INT;}
         bool isUInt() {return code == UINT;}
         bool isFloat() {return code == FLOAT;}
-        bool isULong() {return code == ULONG;}
         bool operator==(const Type &other) const {
             return bits == other.bits && code == other.code;
         }
@@ -33,7 +32,6 @@ namespace Halide {
     Type Float(unsigned char bits);
     Type Int(unsigned char bits);
     Type UInt(unsigned char bits);
-    Type ULong(unsigned char bits);
 
     template<typename T> Type TypeOf();
     template<> Type TypeOf<float>();

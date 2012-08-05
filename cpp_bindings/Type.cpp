@@ -5,7 +5,6 @@ namespace Halide {
     ML_FUNC1(makeFloatType);
     ML_FUNC1(makeIntType);
     ML_FUNC1(makeUIntType);
-    ML_FUNC1(makeULongType);
 
     template<>
     Type TypeOf<float>() {
@@ -30,11 +29,6 @@ namespace Halide {
     template<>
     Type TypeOf<unsigned int>() {
         return UInt(32);
-    }
-
-    template<>
-    Type TypeOf<unsigned long>() {
-        return ULong(64);
     }
 
     template<>
@@ -72,10 +66,6 @@ namespace Halide {
 
     Type UInt(unsigned char bits) {
         return Type {makeUIntType((bits)), bits, Type::UINT};
-    }
-
-    Type ULong(unsigned char bits) {
-        return Type {makeULongType((bits)), bits, Type::ULONG};
     }
 
 }
