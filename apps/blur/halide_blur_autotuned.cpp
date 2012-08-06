@@ -1,6 +1,10 @@
+#include <unistd.h>
+
+#include <cstdlib>
+
+#include <Halide.h>
+
 #include <sys/time.h>
-#include <FImage.h>
-using namespace FImage;
 
 void *watchdog(void *arg) {
   usleep(((useconds_t *)arg)[0]);
@@ -9,6 +13,7 @@ void *watchdog(void *arg) {
 }
 
 int main(int argc, char **argv) {
+   using namespace Halide;
 
   UniformImage input(UInt(16), 2);
   Func blur_x, blur_y;  
