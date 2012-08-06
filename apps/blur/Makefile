@@ -22,7 +22,7 @@ test_cuda: test.cpp halide_blur.o
 	$(GXX) -fopenmp -std=c++0x -Wall -O3 test.cpp halide_blur.o -o test -lpthread -ldl -lpng -L/usr/local/cuda/lib -lcuda  $(PNGFLAGS)
 
 test: test.cpp halide_blur.o
-	$(GXX) -fopenmp -std=c++0x -Wall -O3 test.cpp halide_blur.o -o test -lpthread -ldl -L/opt/local/lib -lpng $(PNGFLAGS)
+	$(GXX) -fopenmp -std=c++0x -Wall -O3 -ffast-math test.cpp halide_blur.o -o test -lpthread -ldl -L/opt/local/lib -lpng $(PNGFLAGS)
 
 clean:
 	rm -f test test_cuda halide_blur.o halide_blur.bc halide_blur

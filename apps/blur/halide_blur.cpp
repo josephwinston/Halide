@@ -3,6 +3,12 @@ using namespace Halide;
 
 int main(int argc, char **argv) {
 
+#if USE_CPU
+   printf("Execute on CPU\n");
+#else
+   printf("Execute on GPU\n");
+#endif /* USE_CPU */
+
   UniformImage input(UInt(16), 2);
   Func blur_x("blur_x"), blur_y("blur_y");
   Var x("x"), y("y"), xo("blockidx"), yo("blockidy"), xi("threadidx"), yi("threadidy");
@@ -12,26 +18,26 @@ int main(int argc, char **argv) {
   blur_y(x, y) = (blur_x(x, y-1) + blur_x(x, y) + blur_x(x, y+1))/3;
   
   // How to schedule it
-  #if USE_CPU
+#if USE_CPU
   blur_y.tile(x, y, xi, yi, 64, 64);
   blur_y.vectorize(xi, 8);
   blur_y.parallel(y);
   blur_x.chunk(x);
   blur_x.vectorize(x, 8);
-  #else // GPU
+#else /* USE_CPU is false -> Running on GPU */
   blur_y.split(x, xo, xi, 32).split(y, yo, yi, 16).transpose(xo, yi);
   //blur_y.tile()
   blur_y.parallel(yo).parallel(yi).parallel(xo).parallel(xi);
   
-  #if 0
+#if 0
   // chunking
   blur_x.chunk(xo);
   blur_x.split(x, xi, x, 1).split(y, yi, y, 1);
   blur_x.parallel(yo).parallel(yi).parallel(xo).parallel(xi);
-  #else
+#else /* 0 */
   // inline
-  #endif
-  #endif
+#endif /* 0 */
+#endif /* USE_CPU */
 
   blur_y.compileToFile("halide_blur");
   return 0;

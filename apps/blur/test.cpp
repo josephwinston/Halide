@@ -229,7 +229,8 @@ int main(int argc, char **argv) {
   float halide_time = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0f;
 
   // fast_time2 is always slower than fast_time, so skip printing it
-  printf("times: %f %f %f\n", slow_time, fast_time, halide_time);
+  printf("times: naive = %f s; hand tuned = %f s; halide %f s\n", 
+         slow_time, fast_time, halide_time);
 
   for (int y = 64; y < input.height() - 64; y++) {
     for (int x = 64; x < input.width() - 64; x++) {
