@@ -3,11 +3,11 @@ using namespace Halide;
 
 int main(int argc, char **argv) {
 
-#if USE_CPU
-   printf("Execute on CPU\n");
+#if USE_VERSION_IN_PAPER
+   printf("Executing using scheduler found in paper\n");
 #else
-   printf("Execute on GPU\n");
-#endif /* USE_CPU */
+   printf("Executing using a different scheduler\n");
+#endif /* USE_VERSION_IN_PAPER */
 
   UniformImage input(UInt(16), 2);
   Func blur_x("blur_x"), blur_y("blur_y");
@@ -18,13 +18,13 @@ int main(int argc, char **argv) {
   blur_y(x, y) = (blur_x(x, y-1) + blur_x(x, y) + blur_x(x, y+1))/3;
   
   // How to schedule it
-#if USE_CPU
-  blur_y.tile(x, y, xi, yi, 64, 64);
+#if USE_VERSION_IN_PAPER
+  blur_y.tile(x, y, xi, yi, 256, 32);
   blur_y.vectorize(xi, 8);
   blur_y.parallel(y);
   blur_x.chunk(x);
   blur_x.vectorize(x, 8);
-#else /* USE_CPU is false -> Running on GPU */
+#else /* USE_VERSION_IN_PAPER is false -> Using different schedule */
   blur_y.split(x, xo, xi, 32).split(y, yo, yi, 16).transpose(xo, yi);
   //blur_y.tile()
   blur_y.parallel(yo).parallel(yi).parallel(xo).parallel(xi);
@@ -37,7 +37,7 @@ int main(int argc, char **argv) {
 #else /* 0 */
   // inline
 #endif /* 0 */
-#endif /* USE_CPU */
+#endif /* USE_VERSION_IN_PAPER */
 
   blur_y.compileToFile("halide_blur");
   return 0;

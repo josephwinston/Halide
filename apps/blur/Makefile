@@ -10,7 +10,7 @@ PNGFLAGS=$(shell libpng-config --ldflags) $(shell libpng-config --cflags)
 
 halide_blur: ../../cpp_bindings/ ../../src/ halide_blur.cpp
 	$(MAKE) -C ../../cpp_bindings libHalide.a
-	$(GXX) -DUSE_CPU halide_blur.cpp -I ../../cpp_bindings/ ../../cpp_bindings/libHalide.a  -std=c++0x -o halide_blur -ldl -lpthread
+	$(GXX) -DUSE_VERSION_IN_PAPER halide_blur.cpp -I ../../cpp_bindings/ ../../cpp_bindings/libHalide.a  -std=c++0x -o halide_blur -ldl -lpthread
 
 halide_blur.bc: halide_blur
 	./halide_blur
