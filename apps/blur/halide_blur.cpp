@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
   blur_y(x, y) = (blur_x(x, y-1) + blur_x(x, y) + blur_x(x, y+1))/3;
   
   // How to schedule it
-  #if 0
+  #if USE_CPU
   blur_y.tile(x, y, xi, yi, 64, 64);
   blur_y.vectorize(xi, 8);
   blur_y.parallel(y);
