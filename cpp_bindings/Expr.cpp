@@ -247,7 +247,9 @@ namespace Halide {
         set_union(uniformImages, c.uniformImages());
         if (c.implicitArgs() > implicitArgs) implicitArgs = c.implicitArgs();
 
+#ifndef NDEBUG
 	bool check = !rdom.isDefined() || !c.rdom().isDefined() || rdom == c.rdom();
+#endif /* NDEBUG */
 	assert(check && "Each expression can only depend on a single reduction domain");
 	if (c.rdom().isDefined()) {
 	    rdom = c.rdom();

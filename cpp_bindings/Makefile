@@ -2,6 +2,9 @@ ifneq ($(shell env command -v g++-mp-4.7),)
 GXX ?= g++-mp-4.7
 endif
 GXX ?= g++-mp-4.6
+#
+# Add  -DNDEBUG to remove asserts
+# 
 CXX=$(GXX) -std=c++0x -Wall -Werror -ffast-math -fno-rtti -O3 -msse -Wl,-dead_strip
 
 HEADERS = MLVal.h Util.h Var.h Type.h Uniform.h Expr.h Image.h Func.h Reduction.h Uniform.h
