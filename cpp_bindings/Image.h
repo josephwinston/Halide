@@ -70,6 +70,7 @@ namespace Halide {
         int s0, s1, s2, s3;
 
         void init() {
+            im.markHostDirty();
             base = (T*)im.data();
             s0 = im.stride(0);
             if (im.dimensions() > 1) s1 = im.stride(1);
@@ -85,7 +86,6 @@ namespace Halide {
         Image(DynImage im) : im(im) {
             assert(TypeOf<T>() == im.type());
             im.copyToHost();
-            im.markHostDirty();
             init();
         }
 
@@ -176,9 +176,9 @@ namespace Halide {
     
     class ImageRef {
     public:
-        ImageRef(const DynImage &im, const Expr &idx) : image(im), idx(idx) {}
+        ImageRef(const DynImage &im, const std::vector<Expr> &idx) : image(im), idx(idx) {}
         const DynImage image;
-        const Expr idx;
+        const std::vector<Expr> idx;
     };       
     
     class UniformImage {
@@ -214,10 +214,10 @@ namespace Halide {
     };
 
     class UniformImageRef {
-      public:
-        UniformImageRef(const UniformImage &im, const Expr &idx) : image(im), idx(idx) {}
+    public:
+        UniformImageRef(const UniformImage &im, const std::vector<Expr> &idx) : image(im), idx(idx) {}
         const UniformImage image;
-        const Expr idx;
+        const std::vector<Expr> idx;
     };
 
 }
