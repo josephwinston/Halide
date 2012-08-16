@@ -764,7 +764,10 @@ namespace Halide {
                     std::string bc_name = "./" + name + ".bc";
                     snprintf(cmd1, 1024, "opt-mp-3.1 -O3 %s | llc-mp-3.1 -O3 -relocation-model=pic -filetype=obj > %s", bc_name.c_str(), obj_name.c_str());
                 }
+                snprintf(cmd2, 1024, "gcc -shared %s -o %s", obj_name.c_str(), so_name.c_str());
+                printf("%s\n", cmd1);
                 snprintf(cmd2, 1024, "gcc-mp-4.7 -shared %s -o %s", obj_name.c_str(), so_name.c_str());
+                snprintf(cmd2, 1024, "gcc -shared %s -o %s", obj_name.c_str(), so_name.c_str());
                 fprintf(stderr, "%s\n", cmd1);
                 assert(0 == system(cmd1));
                 fprintf(stderr, "%s\n", cmd2);
