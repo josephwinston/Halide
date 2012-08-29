@@ -38,24 +38,6 @@ let rec cg_expr (con : context) (expr : expr) =
 
   let cg_expr e = cg_expr con e in
 
-  (* 
-  let cg_select cond thenCase elseCase =
-    let elts = vector_elements (val_type_of_expr cond) in
-    let bits = element_width (val_type_of_expr thenCase) in
-    let l = cg_expr thenCase in
-    let r = cg_expr elseCase in
-    let mask = cg_expr cond in
-    let mask = build_sext mask (type_of_val_type c (IntVector (bits, elts))) "" b in
-    let ones = const_all_ones (type_of mask) in
-    let inv_mask = build_xor mask ones "" b in
-    let t = type_of l in
-    let l = build_bitcast l (type_of mask) "" b in
-    let r = build_bitcast r (type_of mask) "" b in
-    let result = build_or (build_and mask l "" b) (build_and inv_mask r "" b) "" b in
-    build_bitcast result t "" b       
-  in    
-  *)
-  
   let rec is_power_of_two = function
     | 1 -> true
     | x -> let y = x/2 in (is_power_of_two y) && (x = y*2)
@@ -68,6 +50,19 @@ let rec cg_expr (con : context) (expr : expr) =
 
   (* Peephole optimizations for arm *)
   match expr with 
+    | Select (cond, thenCase, elseCase) -> 
+        let elts = vector_elements (val_type_of_expr cond) in
+        let bits = element_width (val_type_of_expr thenCase) in
+        let l = cg_expr thenCase in
+	let r = cg_expr elseCase in
+	let mask = cg_expr cond in
+	let mask = build_sext mask (type_of_val_type c (IntVector (bits, elts))) "" b in
+	let inv_mask = build_not mask "" b in
+	let t = type_of l in
+	let l = build_bitcast l (type_of mask) "" b in
+	let r = build_bitcast r (type_of mask) "" b in
+	let result = build_or (build_and mask l "" b) (build_and inv_mask r "" b) "" b in
+	build_bitcast result t "" b             
     | Bop (Min, l, r) when is_vector l -> 
         begin match (val_type_of_expr l) with
           | IntVector (16, 8) ->
@@ -106,9 +101,9 @@ let rec cg_expr (con : context) (expr : expr) =
     (* use intrinsics for vector loads/stores *) 
     | Load (t, buf, Ramp (base, IntImm 1, w)) when (bit_width t = 128 || bit_width t = 64) && (t <> (FloatVector (64, 2))) ->
         let intrin = match t with
-          | FloatVector (_, _) -> "4f32" (* there isn't a v2f64 vld *)
           | UIntVector (bits, w) 
           | IntVector (bits, w) -> (string_of_int w) ^ "i" ^ (string_of_int bits)
+          | FloatVector (bits, w) -> (string_of_int w) ^ "f" ^ (string_of_int bits)
           | failwith -> ("ARM vector load of non-vector type " ^ (string_of_val_type t))
         in
         let llt = type_of_val_type c t in
