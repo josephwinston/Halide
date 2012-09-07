@@ -21,8 +21,8 @@ def remove(filename):
 
 proj_root = os.path.join('..', '..')
 llvm_path = os.path.join(proj_root, 'llvm', 'Release+Asserts', 'bin')
-llc = Command(os.path.join(llvm_path, 'llc-mp-4.7'))
-clang = Command(os.path.join(llvm_path, 'clang++-mp-4.7'))
+llc = Command(os.path.join(llvm_path, 'llc'))
+clang = Command(os.path.join(llvm_path, 'clang++'))
 imagestack = Command(os.path.join(proj_root, 'ImageStack', 'bin', 'ImageStack'))
 
 cxx = None
@@ -79,6 +79,7 @@ def test_cpp(name):
             compile_cmd = ["-I../../../cpp_bindings",
                            "-Wno-format",
                            "-fPIC",
+			   "-march=corei7-avx",
                            srcfile,                   
                            "../../../cpp_bindings/libHalide.a", 
                            "-ldl", "-lpthread"]

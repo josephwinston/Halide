@@ -22,7 +22,7 @@ bilateral_grid.bc: bilateral_grid bilateral_grid.cpp
 	./bilateral_grid 8
 
 bilateral_grid.o: bilateral_grid.bc
-	opt -O3 bilateral_grid.bc | llc -O3 -filetype=obj -o bilateral_grid.o
+	opt-mp-3.1 -O3 bilateral_grid.bc | llc-mp-3.1 -O3 -filetype=obj -o bilateral_grid.o
 
 filter: bilateral_grid.o filter.cpp
 	$(GXX) -O3 -ffast-math -Wall -Werror -std=c++0x filter.cpp bilateral_grid.o -lpng -lpthread -ldl -o filter  $(PNGFLAGS) $(CUDA_LFLAGS)
