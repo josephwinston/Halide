@@ -157,7 +157,7 @@ rule "Generate initial modules"
     in
     let c =
     Cmd(S([
-      llvm_tool "clang"; A"-emit-llvm"; A"-S"; P(env "architecture.%(arch).stdlib.cpp"); A"-o"; A"-";
+      llvm_tool "clang"; A"-march=corei7-avx"; A"-emit-llvm"; A"-S"; P(env "architecture.%(arch).stdlib.cpp"); A"-o"; A"-";
       Sh " | ";
       A"grep"; A"-v"; A"^target triple";
       Sh " | ";
