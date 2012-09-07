@@ -31,25 +31,25 @@ namespace Halide {
     
     bool use_gpu() {
         char* target = getenv("HL_TARGET");
-        return (target != NULL && strcasecmp(target, "ptx") == 0);
+        return (target != NULL && strncasecmp(target, "ptx", 3) == 0);
     }
 
     bool use_avx() {
-	char *target = getenv("HL_TARGET");
-	if (target == NULL || strcasecmp(target, "x86_64") == 0) {
+        char *target = getenv("HL_TARGET");
+        if (target == NULL || strncasecmp(target, "x86_64", 6) == 0) {
         #ifdef __x86_64__
-	    int func = 1, ax, bx, cx, dx;
-	    __asm__ __volatile__ ("cpuid":				
-				  "=a" (ax), 
-				  "=b" (bx), 
-				  "=c" (cx), 
-				  "=d" (dx) : 
-				  "a" (func));	    
-	    // bit 28 of ecx indicates avx support
-	    return cx & 0x10000000;
-	    #endif
-	}
-	return false;
+            int func = 1, ax, bx, cx, dx;
+            __asm__ __volatile__ ("cpuid":                              
+                                  "=a" (ax), 
+                                  "=b" (bx), 
+                                  "=c" (cx), 
+                                  "=d" (dx) : 
+                                  "a" (func));      
+            // bit 28 of ecx indicates avx support
+            return cx & 0x10000000;
+            #endif
+        }
+        return false;
     }
     
     ML_FUNC2(makeVectorizeTransform);
@@ -63,7 +63,7 @@ namespace Halide {
     ML_FUNC2(makeRandomTransform);
     
     ML_FUNC1(doConstantFold);
-    
+  
     ML_FUNC3(makeDefinition);
     ML_FUNC6(addScatterToDefinition);
     ML_FUNC0(makeEnv);
@@ -814,7 +814,7 @@ namespace Halide {
 
         if (!Contents::ee) {
             llvm::InitializeNativeTarget();
-	    llvm::InitializeNativeTargetAsmPrinter();
+            llvm::InitializeNativeTargetAsmPrinter();
         }
 
         // Use the function definitions and the schedule to create the
@@ -842,16 +842,16 @@ namespace Halide {
             std::string errStr;
             llvm::EngineBuilder eeBuilder(m);
             eeBuilder.setErrorStr(&errStr);
-	    eeBuilder.setEngineKind(llvm::EngineKind::JIT);
-	    eeBuilder.setUseMCJIT(false);
+            eeBuilder.setEngineKind(llvm::EngineKind::JIT);
+            eeBuilder.setUseMCJIT(false);
             eeBuilder.setOptLevel(llvm::CodeGenOpt::Aggressive);
 
             // runtime-detect avx to only enable it if supported
-	    // disabled for now until we upgrade llvm
-	    if (use_avx() && 0) {
-		std::vector<std::string> mattrs = {"avx"};
-		eeBuilder.setMAttrs(mattrs);
-	    }
+            // disabled for now until we upgrade llvm
+            if (use_avx() && 0) {
+                std::vector<std::string> mattrs = {"avx"};
+                eeBuilder.setMAttrs(mattrs);
+            }
 
             Contents::ee = eeBuilder.create();
             if (!contents->ee) {

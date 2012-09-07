@@ -171,7 +171,7 @@ Expr absd(Expr a, Expr b) {
     return select(a > b, a-b, b-a);
 }
 
-void check_sse_all() {
+void check_sse_all(bool use_avx, bool use_avx2) {
     UniformImage in_f32(Float(32), 1, "in_f32");
     UniformImage in_f64(Float(64), 1, "in_f64");
     UniformImage in_i8(Int(8), 1, "in_i8");
@@ -197,7 +197,7 @@ void check_sse_all() {
 
     const int min_i8 = -128, max_i8 = 127;
     const int min_i16 = -32768, max_i16 = 32767;
-    const int min_i32 = 0x80000000, max_i32 = 0x7fffffff;
+    // const int min_i32 = 0x80000000, max_i32 = 0x7fffffff;
     const int max_u8 = 255;
     const int max_u16 = 65535;
 
@@ -217,6 +217,7 @@ void check_sse_all() {
     check_sse("paddd", 4, i32_1 + i32_2);
     check_sse("psubd", 4, i32_1 - i32_2);
     check_sse("pmulhw", 8, i16((i32(i16_1) * i32(i16_2)) / (256*256)));
+    check_sse("pmulhw", 8, i16_1 / 15);
     check_sse("pmullw", 8, i16_1 * i16_2);
 
     check_sse("pcmpeqb", 16, select(u8_1 == u8_2, u8(1), u8(2)));
@@ -243,7 +244,8 @@ void check_sse_all() {
     check_sse("pminsw", 8, min(i16_1, i16_2));
     check_sse("pmaxub", 16, max(u8_1, u8_2));
     check_sse("pminub", 16, min(u8_1, u8_2));
-    check_sse("pmulhuw", 8, i16((i32(i16_1) * i32(i16_2))/(256*256)));
+    check_sse("pmulhuw", 8, u16((u32(u16_1) * u32(u16_2))/(256*256)));
+    check_sse("pmulhuw", 8, u16_1 / 15);
 
     /* Not implemented yet in the front-end
     check_sse("andnps", 4, bool1 & (!bool2));
@@ -281,7 +283,7 @@ void check_sse_all() {
 
     check_sse("cvttps2dq", 4, i32(f32_1));
     check_sse("cvtdq2ps", 4, f32(i32_1));    
-    check_sse("cvttpd2dq", 4, i32(f64_1));
+    check_sse("cvtpd2dq", 4, i32(f64_1));
     check_sse("cvtdq2pd", 4, f64(i32_1));
     check_sse("cvtps2pd", 4, f64(f32_1));
     check_sse("cvtpd2ps", 4, f32(f64_1));
@@ -338,117 +340,119 @@ void check_sse_all() {
     check_sse("pcmpgtq", 2, select(i64_1 > i64_2, i64(1), i64(2)));
 
     // AVX
-    check_sse("vsqrtps", 8, sqrt(f32_1));
-    check_sse("vsqrtpd", 4, sqrt(f64_1));
-    check_sse("vrsqrtps", 8, 1.0f/sqrt(f32_1));
-    check_sse("vrcpps", 8, 1.0f/f32_1);
-
-    /* Not implemented yet in the front-end
-    check_sse("vandnps", 8, bool1 & (!bool2));
-    check_sse("vandps", 8, bool1 & bool2);
-    check_sse("vorps", 8, bool1 | bool2);    
-    check_sse("vxorps", 8, bool1 ^ bool2);    
-    */
-
-    check_sse("vaddps", 8, f32_1 + f32_2);
-    check_sse("vaddpd", 4, f64_1 + f64_2);
-    check_sse("vmulps", 8, f32_1 * f32_2);
-    check_sse("vmulpd", 4, f64_1 * f64_2);
-    check_sse("vsubps", 8, f32_1 - f32_2);
-    check_sse("vsubpd", 4, f64_1 - f64_2);
-    check_sse("vdivps", 8, f32_1 / f32_2);
-    check_sse("vdivpd", 4, f64_1 / f64_2);
-    check_sse("vminps", 8, min(f32_1, f32_2));
-    check_sse("vminpd", 4, min(f64_1, f64_2));
-    check_sse("vmaxps", 8, max(f32_1, f32_2));
-    check_sse("vmaxpd", 4, max(f64_1, f64_2));
-    check_sse("vroundps", 8, round(f32_1));
-    check_sse("vroundpd", 4, round(f64_1));
-    
-    check_sse("vcmpeqpd", 4, select(f64_1 == f64_2, 1.0f, 2.0f));
-    check_sse("vcmpneqpd", 4, select(f64_1 != f64_2, 1.0f, 2.0f));
-    check_sse("vcmplepd", 4, select(f64_1 <= f64_2, 1.0f, 2.0f));
-    check_sse("vcmpltpd", 4, select(f64_1 < f64_2, 1.0f, 2.0f));
-    check_sse("vcmpeqps", 8, select(f32_1 == f32_2, 1.0f, 2.0f));
-    check_sse("vcmpneqps", 8, select(f32_1 != f32_2, 1.0f, 2.0f));
-    check_sse("vcmpleps", 8, select(f32_1 <= f32_2, 1.0f, 2.0f));
-    check_sse("vcmpltps", 8, select(f32_1 < f32_2, 1.0f, 2.0f));
-
-    check_sse("vblendvps", 8, select(f32_1 > 0.7f, f32_1, f32_2));
-    check_sse("vblendvpd", 4, select(f64_1 > 0.7, f64_1, f64_2));
-
-    check_sse("vcvttps2dq", 8, i32(f32_1));
-    check_sse("vcvtdq2ps", 8, f32(i32_1));    
-    check_sse("vcvttpd2dq", 8, i32(f64_1));
-    check_sse("vcvtdq2pd", 8, f64(i32_1));
-    check_sse("vcvtps2pd", 8, f64(f32_1));
-    check_sse("vcvtpd2ps", 8, f32(f64_1));
+    if (use_avx) {
+	check_sse("vsqrtps", 8, sqrt(f32_1));
+	check_sse("vsqrtpd", 4, sqrt(f64_1));
+	check_sse("vrsqrtps", 8, 1.0f/sqrt(f32_1));
+	check_sse("vrcpps", 8, 1.0f/f32_1);
+	
+	/* Not implemented yet in the front-end
+	   check_sse("vandnps", 8, bool1 & (!bool2));
+	   check_sse("vandps", 8, bool1 & bool2);
+	   check_sse("vorps", 8, bool1 | bool2);    
+	   check_sse("vxorps", 8, bool1 ^ bool2);    
+	*/
+	
+	check_sse("vaddps", 8, f32_1 + f32_2);
+	check_sse("vaddpd", 4, f64_1 + f64_2);
+	check_sse("vmulps", 8, f32_1 * f32_2);
+	check_sse("vmulpd", 4, f64_1 * f64_2);
+	check_sse("vsubps", 8, f32_1 - f32_2);
+	check_sse("vsubpd", 4, f64_1 - f64_2);
+	check_sse("vdivps", 8, f32_1 / f32_2);
+	check_sse("vdivpd", 4, f64_1 / f64_2);
+	check_sse("vminps", 8, min(f32_1, f32_2));
+	check_sse("vminpd", 4, min(f64_1, f64_2));
+	check_sse("vmaxps", 8, max(f32_1, f32_2));
+	check_sse("vmaxpd", 4, max(f64_1, f64_2));
+	check_sse("vroundps", 8, round(f32_1));
+	check_sse("vroundpd", 4, round(f64_1));
+	
+	check_sse("vcmpeqpd", 4, select(f64_1 == f64_2, 1.0f, 2.0f));
+	check_sse("vcmpneqpd", 4, select(f64_1 != f64_2, 1.0f, 2.0f));
+	check_sse("vcmplepd", 4, select(f64_1 <= f64_2, 1.0f, 2.0f));
+	check_sse("vcmpltpd", 4, select(f64_1 < f64_2, 1.0f, 2.0f));
+	check_sse("vcmpeqps", 8, select(f32_1 == f32_2, 1.0f, 2.0f));
+	check_sse("vcmpneqps", 8, select(f32_1 != f32_2, 1.0f, 2.0f));
+	check_sse("vcmpleps", 8, select(f32_1 <= f32_2, 1.0f, 2.0f));
+	check_sse("vcmpltps", 8, select(f32_1 < f32_2, 1.0f, 2.0f));
+	
+	check_sse("vblendvps", 8, select(f32_1 > 0.7f, f32_1, f32_2));
+	check_sse("vblendvpd", 4, select(f64_1 > 0.7, f64_1, f64_2));
+	
+	check_sse("vcvttps2dq", 8, i32(f32_1));
+	check_sse("vcvtdq2ps", 8, f32(i32_1));    
+	check_sse("vcvtpd2dq", 8, i32(f64_1));
+	check_sse("vcvtdq2pd", 8, f64(i32_1));
+	check_sse("vcvtps2pd", 8, f64(f32_1));
+	check_sse("vcvtpd2ps", 8, f32(f64_1));
+    }
 
     // AVX 2
-    // Skip this for now
-    /*
-    check_sse("vpaddb", 32, u8_1 + u8_2);
-    check_sse("vpsubb", 32, u8_1 - u8_2);
-    check_sse("vpaddsb", 32, i8(clamp(i16(i8_1) + i16(i8_2), min_i8, max_i8)));
-    check_sse("vpsubsb", 32, i8(clamp(i16(i8_1) - i16(i8_2), min_i8, max_i8)));
-    check_sse("vpaddusb", 32, u8(min(u16(u8_1) + u16(u8_2), max_u8)));
-    check_sse("vpsubusb", 32, u8(min(u16(u8_1) - u16(u8_2), max_u8)));
-    check_sse("vpaddw", 16, u16_1 + u16_2);
-    check_sse("vpsubw", 16, u16_1 - u16_2);
-    check_sse("vpaddsw", 16, i16(clamp(i32(i16_1) + i32(i16_2), min_i16, max_i16)));
-    check_sse("vpsubsw", 16, i16(clamp(i32(i16_1) - i32(i16_2), min_i16, max_i16)));
-    check_sse("vpaddusw", 16, u16(min(u32(u16_1) + u32(u16_2), max_u16)));
-    check_sse("vpsubusw", 16, u16(min(u32(u16_1) - u32(u16_2), max_u16)));
-    check_sse("vpaddd", 8, i32_1 + i32_2);
-    check_sse("vpsubd", 8, i32_1 - i32_2);
-    check_sse("vpmulhw", 16, i16((i32(i16_1) * i32(i16_2)) / (256*256)));
-    check_sse("vpmullw", 16, i16_1 * i16_2);
 
-    check_sse("vpcmpeqb", 32, select(u8_1 == u8_2, u8(1), u8(2)));
-    check_sse("vpcmpgtb", 32, select(u8_1 > u8_2, u8(1), u8(2)));
-    check_sse("vpcmpeqw", 16, select(u16_1 == u16_2, u16(1), u16(2)));
-    check_sse("vpcmpgtw", 16, select(u16_1 > u16_2, u16(1), u16(2)));
-    check_sse("vpcmpeqd", 8, select(u32_1 == u32_2, u32(1), u32(2)));
-    check_sse("vpcmpgtd", 8, select(u32_1 > u32_2, u32(1), u32(2)));    
-    
-    check_sse("vpavgb", 32, (u8_1 + u8_2)/2);
-    check_sse("vpavgw", 16, (i16_1 + i16_2)/2);
-    check_sse("vpmaxsw", 16, max(i16_1, i16_2));
-    check_sse("vpminsw", 16, min(i16_1, i16_2));
-    check_sse("vpmaxub", 32, max(u8_1, u8_2));
-    check_sse("vpminub", 32, min(u8_1, u8_2));
-    check_sse("vpmulhuw", 16, i16((i32(i16_1) * i32(i16_2))/(256*256)));
+    if (use_avx2) {
+	check_sse("vpaddb", 32, u8_1 + u8_2);
+	check_sse("vpsubb", 32, u8_1 - u8_2);
+	check_sse("vpaddsb", 32, i8(clamp(i16(i8_1) + i16(i8_2), min_i8, max_i8)));
+	check_sse("vpsubsb", 32, i8(clamp(i16(i8_1) - i16(i8_2), min_i8, max_i8)));
+	check_sse("vpaddusb", 32, u8(min(u16(u8_1) + u16(u8_2), max_u8)));
+	check_sse("vpsubusb", 32, u8(min(u16(u8_1) - u16(u8_2), max_u8)));
+	check_sse("vpaddw", 16, u16_1 + u16_2);
+	check_sse("vpsubw", 16, u16_1 - u16_2);
+	check_sse("vpaddsw", 16, i16(clamp(i32(i16_1) + i32(i16_2), min_i16, max_i16)));
+	check_sse("vpsubsw", 16, i16(clamp(i32(i16_1) - i32(i16_2), min_i16, max_i16)));
+	check_sse("vpaddusw", 16, u16(min(u32(u16_1) + u32(u16_2), max_u16)));
+	check_sse("vpsubusw", 16, u16(min(u32(u16_1) - u32(u16_2), max_u16)));
+	check_sse("vpaddd", 8, i32_1 + i32_2);
+	check_sse("vpsubd", 8, i32_1 - i32_2);
+	check_sse("vpmulhw", 16, i16((i32(i16_1) * i32(i16_2)) / (256*256)));
+	check_sse("vpmullw", 16, i16_1 * i16_2);
 
-    check_sse("vpaddq", 8, i64_1 + i64_2);
-    check_sse("vpsubq", 8, i64_1 - i64_2);
-    check_sse("vpmuludq", 8, u64_1 * u64_2);
+	check_sse("vpcmpeqb", 32, select(u8_1 == u8_2, u8(1), u8(2)));
+	check_sse("vpcmpgtb", 32, select(u8_1 > u8_2, u8(1), u8(2)));
+	check_sse("vpcmpeqw", 16, select(u16_1 == u16_2, u16(1), u16(2)));
+	check_sse("vpcmpgtw", 16, select(u16_1 > u16_2, u16(1), u16(2)));
+	check_sse("vpcmpeqd", 8, select(u32_1 == u32_2, u32(1), u32(2)));
+	check_sse("vpcmpgtd", 8, select(u32_1 > u32_2, u32(1), u32(2)));    
+	
+	check_sse("vpavgb", 32, u8((u16(u8_1) + u16(u8_2) + 1)/2));
+	check_sse("vpavgw", 16, u16((u32(u16_1) + u32(u16_2) + 1)/2));
+	check_sse("vpmaxsw", 16, max(i16_1, i16_2));
+	check_sse("vpminsw", 16, min(i16_1, i16_2));
+	check_sse("vpmaxub", 32, max(u8_1, u8_2));
+	check_sse("vpminub", 32, min(u8_1, u8_2));
+	check_sse("vpmulhuw", 16, i16((i32(i16_1) * i32(i16_2))/(256*256)));
+	
+	check_sse("vpaddq", 8, i64_1 + i64_2);
+	check_sse("vpsubq", 8, i64_1 - i64_2);
+	check_sse("vpmuludq", 8, u64_1 * u64_2);
+	
+	check_sse("vpackssdw", 16, i16(clamp(i32_1, min_i16, max_i16)));
+	check_sse("vpacksswb", 32, i8(clamp(i16_1, min_i8, max_i8)));
+	check_sse("vpackuswb", 32, u8(clamp(i16_1, 0, max_u8)));
+	
+	check_sse("vpabsb", 32, abs(i8_1));
+	check_sse("vpabsw", 16, abs(i16_1));
+	check_sse("vpabsd", 8, abs(i32_1));
+	
+	check_sse("vpmuldq", 4, i64(i32_1) * i64(i32_2));
+	check_sse("vpmulld", 8, i32_1 * i32_2);
+	
+	check_sse("vpblendvb", 32, select(u8_1 > 7, u8_1, u8_2));
+	
+	check_sse("vpmaxsb", 32, max(i8_1, i8_2));
+	check_sse("vpminsb", 32, min(i8_1, i8_2));
+	check_sse("vpmaxuw", 16, max(u16_1, u16_2));
+	check_sse("vpminuw", 16, min(u16_1, u16_2));
+	check_sse("vpmaxud", 16, max(u32_1, u32_2));
+	check_sse("vpminud", 16, min(u32_1, u32_2));
+	check_sse("vpmaxsd", 8, max(i32_1, i32_2));
+	check_sse("vpminsd", 8, min(i32_1, i32_2));
 
-    check_sse("vpackssdw", 16, i16(clamp(i32_1, min_i16, max_i16)));
-    check_sse("vpacksswb", 32, i8(clamp(i16_1, min_i8, max_i8)));
-    check_sse("vpackuswb", 32, u8(clamp(i16_1, 0, max_u8)));
-
-    check_sse("vpabsb", 32, abs(i8_1));
-    check_sse("vpabsw", 16, abs(i16_1));
-    check_sse("vpabsd", 8, abs(i32_1));
-
-    check_sse("vpmuldq", 4, i64(i32_1) * i64(i32_2));
-    check_sse("vpmulld", 8, i32_1 * i32_2);
-
-    check_sse("vpblendvb", 32, select(u8_1 > 7, u8_1, u8_2));
-
-    check_sse("vpmaxsb", 32, max(i8_1, i8_2));
-    check_sse("vpminsb", 32, min(i8_1, i8_2));
-    check_sse("vpmaxuw", 16, max(u16_1, u16_2));
-    check_sse("vpminuw", 16, min(u16_1, u16_2));
-    check_sse("vpmaxud", 16, max(u32_1, u32_2));
-    check_sse("vpminud", 16, min(u32_1, u32_2));
-    check_sse("vpmaxsd", 8, max(i32_1, i32_2));
-    check_sse("vpminsd", 8, min(i32_1, i32_2));
-
-    check_sse("vpcmpeqq", 4, select(i64_1 == i64_2, i64(1), i64(2)));
-    check_sse("vpackusdw", 16, u16(clamp(i32_1, 0, max_u16)));
-    check_sse("vpcmpgtq", 4, select(i64_1 > i64_2, i64(1), i64(2)));
-    */
+	check_sse("vpcmpeqq", 4, select(i64_1 == i64_2, i64(1), i64(2)));
+	check_sse("vpackusdw", 16, u16(clamp(i32_1, 0, max_u16)));
+	check_sse("vpcmpgtq", 4, select(i64_1 > i64_2, i64(1), i64(2)));
+    }
 }
 
 void check_neon_all() {
@@ -477,7 +481,7 @@ void check_neon_all() {
 
     const int min_i8 = -128, max_i8 = 127;
     const int min_i16 = -32768, max_i16 = 32767;
-    const int min_i32 = 0x80000000, max_i32 = 0x7fffffff;
+    //const int min_i32 = 0x80000000, max_i32 = 0x7fffffff;
     const int max_u8 = 255;
     const int max_u16 = 65535;
 
@@ -1024,18 +1028,18 @@ void check_neon_all() {
     // VQABS	I	-	Saturating Absolute
     check_neon("vqabs.s8", 16, i8(min(abs(i16(i8_1)),   max_i8)));
     check_neon("vqabs.s16", 8, i16(min(abs(i32(i16_1)), max_i16)));
-    check_neon("vqabs.s32", 4, i32(min(abs(i64(i32_1)), max_i32)));
+    //check_neon("vqabs.s32", 4, i32(min(abs(i64(i32_1)), max_i32)));
     check_neon("vqabs.s8",  8, i8(min(abs(i16(i8_1)),   max_i8)));
     check_neon("vqabs.s16", 4, i16(min(abs(i32(i16_1)), max_i16)));
-    check_neon("vqabs.s32", 2, i32(min(abs(i64(i32_1)), max_i32)));
+    //check_neon("vqabs.s32", 2, i32(min(abs(i64(i32_1)), max_i32)));
 
     // VQADD	I	-	Saturating Add
     check_neon("vqadd.s8", 16,  i8(clamp(i16(i8_1)  + i16(i8_2),  min_i8,  max_i8)));
     check_neon("vqadd.s16", 8, i16(clamp(i32(i16_1) + i32(i16_2), min_i16, max_i16)));
-    check_neon("vqadd.s32", 8, i32(clamp(i64(i32_1) + i64(i32_2), min_i32, max_i32)));
+    //check_neon("vqadd.s32", 8, i32(clamp(i64(i32_1) + i64(i32_2), min_i32, max_i32)));
     check_neon("vqadd.s8",  8,  i8(clamp(i16(i8_1)  + i16(i8_2),  min_i8,  max_i8)));
     check_neon("vqadd.s16", 4, i16(clamp(i32(i16_1) + i32(i16_2), min_i16, max_i16)));
-    check_neon("vqadd.s32", 4, i32(clamp(i64(i32_1) + i64(i32_2), min_i32, max_i32)));
+    //check_neon("vqadd.s32", 4, i32(clamp(i64(i32_1) + i64(i32_2), min_i32, max_i32)));
 
     check_neon("vqadd.u8", 16,  u8(min(u16(u8_1)  + u16(u8_2),  max_u8)));
     check_neon("vqadd.u16", 8, u16(min(u32(u16_1) + u32(u16_2), max_u16)));
@@ -1061,7 +1065,7 @@ void check_neon_all() {
     // VQMOVN	I	-	Saturating Move and Narrow
     check_neon("vqmovn.s16", 8,  i8(clamp(i16_1, min_i8,  max_i8)));
     check_neon("vqmovn.s32", 4, i16(clamp(i32_1, min_i16, max_i16)));
-    check_neon("vqmovn.s64", 2, i32(clamp(i64_1, min_i32, max_i32)));
+    //check_neon("vqmovn.s64", 2, i32(clamp(i64_1, min_i32, max_i32)));
     check_neon("vqmovn.u16", 8,  u8(min(u16_1, max_u8)));
     check_neon("vqmovn.u32", 4, u16(min(u32_1, max_u16)));
     // Can't do the 64-bit one because we only have signed 32-bit consts
@@ -1074,10 +1078,10 @@ void check_neon_all() {
     // VQNEG	I	-	Saturating Negate
     check_neon("vqneg.s8", 16, -max(i8_1,  -max_i8));
     check_neon("vqneg.s16", 8, -max(i16_1, -max_i16));
-    check_neon("vqneg.s32", 4, -max(i32_1, -max_i32));
+    //check_neon("vqneg.s32", 4, -max(i32_1, -max_i32));
     check_neon("vqneg.s8",  8, -max(i8_1,  -max_i8));
     check_neon("vqneg.s16", 4, -max(i16_1, -max_i16));
-    check_neon("vqneg.s32", 2, -max(i32_1, -max_i32));
+    //check_neon("vqneg.s32", 2, -max(i32_1, -max_i32));
 
     // VQRDMULH	I	-	Saturating Rounding Doubling Multiply Returning High Half
     // VQRSHL	I	-	Saturating Rounding Shift Left    
@@ -1088,10 +1092,10 @@ void check_neon_all() {
     // VQSHL	I	-	Saturating Shift Left
     check_neon("vqshl.s8", 16,  i8(clamp(i16(i8_1)*16,  min_i8,  max_i8)));
     check_neon("vqshl.s16", 8, i16(clamp(i32(i16_1)*16, min_i16, max_i16)));
-    check_neon("vqshl.s32", 4, i32(clamp(i64(i32_1)*16, min_i32, max_i32)));
+    //check_neon("vqshl.s32", 4, i32(clamp(i64(i32_1)*16, min_i32, max_i32)));
     check_neon("vqshl.s8",  8,  i8(clamp(i16(i8_1)*16,  min_i8,  max_i8)));
     check_neon("vqshl.s16", 4, i16(clamp(i32(i16_1)*16, min_i16, max_i16)));
-    check_neon("vqshl.s32", 2, i32(clamp(i64(i32_1)*16, min_i32, max_i32)));
+    //check_neon("vqshl.s32", 2, i32(clamp(i64(i32_1)*16, min_i32, max_i32)));
     // skip the versions that we don't have constants for
 
     // VQSHLU	I	-	Saturating Shift Left Unsigned
@@ -1104,17 +1108,17 @@ void check_neon_all() {
     // VQSHRUN	I	-	Saturating Shift Right Unsigned Narrow
     check_neon("vqshrn.s16", 8,  i8(clamp(i16_1/16, min_i8,  max_i8)));
     check_neon("vqshrn.s32", 4, i16(clamp(i32_1/16, min_i16, max_i16)));
-    check_neon("vqshrn.s64", 2, i32(clamp(i64_1/16, min_i32, max_i32)));
+    //check_neon("vqshrn.s64", 2, i32(clamp(i64_1/16, min_i32, max_i32)));
     check_neon("vqshrun.u16", 8,  u8(min(u16_1/16, max_u8)));
     check_neon("vqshrun.u32", 4, u16(min(u32_1/16, max_u16)));
 
     // VQSUB	I	-	Saturating Subtract
     check_neon("vqsub.s8", 16,  i8(clamp(i16(i8_1)  - i16(i8_2),  min_i8,  max_i8)));
     check_neon("vqsub.s16", 8, i16(clamp(i32(i16_1) - i32(i16_2), min_i16, max_i16)));
-    check_neon("vqsub.s32", 8, i32(clamp(i64(i32_1) - i64(i32_2), min_i32, max_i32)));
+    //check_neon("vqsub.s32", 8, i32(clamp(i64(i32_1) - i64(i32_2), min_i32, max_i32)));
     check_neon("vqsub.s8",  8,  i8(clamp(i16(i8_1)  - i16(i8_2),  min_i8,  max_i8)));
     check_neon("vqsub.s16", 4, i16(clamp(i32(i16_1) - i32(i16_2), min_i16, max_i16)));
-    check_neon("vqsub.s32", 4, i32(clamp(i64(i32_1) - i64(i32_2), min_i32, max_i32)));
+    //check_neon("vqsub.s32", 4, i32(clamp(i64(i32_1) - i64(i32_2), min_i32, max_i32)));
 
     check_neon("vqsub.u8", 16,  u8(clamp(i16(u8_1)  - i16(u8_2),  0, max_u8)));
     check_neon("vqsub.u16", 8, u16(clamp(i32(u16_1) - i32(u16_2), 0, max_u16)));
@@ -1352,8 +1356,10 @@ int main(int argc, char **argv) {
     else filter = NULL;
 
     char *target = getenv("HL_TARGET");
-    if (!target || strcasecmp(target, "x86_64") == 0) {
-	check_sse_all();
+    if (!target || strncasecmp(target, "x86_64", 6) == 0) {
+	bool use_avx = target && strstr(target, "avx");
+	bool use_avx2 = target && strstr(target, "avx2");
+	check_sse_all(use_avx, use_avx2);
     } else {
 	check_neon_all();
     }
