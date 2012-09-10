@@ -1,5 +1,10 @@
 %module(naturalvar=1) cHalide
+
+%nestedworkaround (Halide::Func::Arg);
+
 %{
+#include <cstddef>
+   
 #include "Func.h"
 #include "Expr.h"
 #include "Var.h"
@@ -33,6 +38,11 @@ using namespace Halide;
 %include "Uniform.h"
 //%include "Tuple.h"
 
+%{
+   typedef Halide::Func::Arg Arg;
+%}
+
+
 %template(Image_uint8) Image<uint8_t>;
 %template(Image_uint16) Image<uint16_t>;
 %template(Image_uint32) Image<uint32_t>;
@@ -65,4 +75,4 @@ namespace std {
    %template(ListInt) vector<int>;
 };
 
-   //%template(ListArg) vector<Arg>;
+// %template(ListArg) vector<Arg>;

@@ -850,7 +850,7 @@ def test_numpy():
     for dtype in [UInt(8), UInt(16), UInt(32), Float(32), Float(64)]: #['int8', 'int16', 'int32', 'uint8', 'uint16', 'uint32', 'float32', 'float64']:
         for mul in [0, 1]:
 #            a = numpy.asarray(PIL.open('lena.png'),dtype)*mul #numpy.array([[1,2],[3,4]],'float32')
-            a = numpy.asarray(Image(dtype, 'lena.png'))*mul #numpy.array([[1,2],[3,4]],'float32')
+            a = numpy.asarray(Image(dtype, 'lena_crop.png'))*mul #numpy.array([[1,2],[3,4]],'float32')
             b = Image(a)
             c = numpy.asarray(b)
             assert a.dtype == c.dtype
@@ -865,7 +865,7 @@ def test_numpy():
                 #out[0].show()
                 c = numpy.asarray(out[0])
                 #print 'anorm:', dist(a,a*0), 'cnorm:', dist(c,c*0), numpy.min(a.flatten()), numpy.max(a.flatten()), numpy.min(c.flatten()), numpy.max(c.flatten()), a.dtype, c.dtype
-                assert dist(a,c)<=1000
+                assert dist(a,c)<=1100
 
     print 'numpy: OK'
     
