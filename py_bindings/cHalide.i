@@ -1,5 +1,7 @@
 %module(naturalvar=1) cHalide
 %{
+#include <cstddef>
+   
 #include "Func.h"
 #include "Expr.h"
 #include "Var.h"
@@ -19,6 +21,12 @@ using namespace Halide;
 %naturalvar;
 %naturalvar Func;
 %naturalvar Expr;
+
+//
+// Nested class gives SWIG problems...
+//
+
+%ignore Halide::Func::compileToFile;
 
 %include "Func.h"
 %include "Expr.h"
@@ -65,4 +73,4 @@ namespace std {
    %template(ListInt) vector<int>;
 };
 
-   //%template(ListArg) vector<Arg>;
+// %template(ListArg) vector<Arg>;
