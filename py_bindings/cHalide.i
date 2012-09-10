@@ -1,4 +1,7 @@
 %module(naturalvar=1) cHalide
+
+%nestedworkaround (Halide::Func::Arg);
+
 %{
 #include <cstddef>
    
@@ -22,12 +25,6 @@ using namespace Halide;
 %naturalvar Func;
 %naturalvar Expr;
 
-//
-// Nested class gives SWIG problems...
-//
-
-%ignore Halide::Func::compileToFile;
-
 %include "Func.h"
 %include "Expr.h"
 %include "Var.h"
@@ -40,6 +37,11 @@ using namespace Halide;
 %include "environ_fix.h"
 %include "Uniform.h"
 //%include "Tuple.h"
+
+%{
+   typedef Halide::Func::Arg Arg;
+%}
+
 
 %template(Image_uint8) Image<uint8_t>;
 %template(Image_uint16) Image<uint16_t>;
