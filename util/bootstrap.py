@@ -3,7 +3,7 @@
 
 import subprocess
 from os import chdir
-from os.path import isfile
+from os.path import isfile, isdir
 import sys
 
 from util import status
@@ -26,19 +26,53 @@ def check_llvm():
         llvm_config = Command(llvm_path+'/bin/llvm-config')
         ver = llvm_config('--version') # try calling llvm-config
         print ver
-        assert '3.1' in ver
+        assert '3.2' in ver 
         return True
     except:
         return False
 
 
-# Test for ocaml 4.0.*
-status('Testing for OCaml 4.0.*')
+# Test for ocaml 3.12.*
+status('Testing for OCaml 3.12.* or greater')
 from pbs import ocaml, ocamlbuild
 ver = ocaml('-version')
 print ver
-assert '4.0' in ver
+assert '3.12' in ver or '4.' in ver
 print '...OK!'
+
+platform = sys.platform.lower()
+if 'linux' in platform:
+    try:
+        status('Testing for g++')
+        from pbs import which
+        assert which('g++')
+        print '...OK!'
+
+        status('Testing for package libc6-dev-i386')
+        assert isfile('/usr/include/x86_64-linux-gnu/gnu/stubs-32.h')
+        print '...OK!'
+    
+        status('Testing for package libsexplib-camlp4-dev')
+        assert isdir('/usr/lib/ocaml/sexplib')
+        print '...OK!'
+    except:
+        print 'You appear to be missing some required packages. Try:'
+        print 'sudo apt-get install g++ libc6-i386-dev ocaml libsexplib-camlp4-dev'
+        sys.exit(1)
+
+if 'darwin' in platform:
+    status('Testing for a sufficiently new g++')
+    gxx = Command('g++')
+    ver = gxx('--version')
+    try:
+        assert 'g++-4.' in ver
+        print '...OK!'
+    except:
+        print 'Your g++ compiler is missing or too old.'
+        print 'Trying installing the command line tools from xcode.'
+        print 'They can be found in preferences -> downloads -> command line tools.'
+        print 'If that doesn\'t work, update xcode and try again.'
+        sys.exit(1)
 
 # Submodule update/init
 # TODO: make --recursive optional
@@ -81,4 +115,4 @@ print ocamlbuild('-use-ocamlfind', 'halide.cmxa')
 chdir('..')
 
 status('Building C++ bindings')
-print make('-C', 'cpp_bindings', '-j12') # can be flakey with first parallel build on SSD
+print make('-C', 'cpp_bindings', '-j1') # can be flakey with first parallel build on SSD

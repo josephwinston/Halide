@@ -84,7 +84,36 @@ let llsupport_linkflags = [
   A"-cclib"; A libllsupport_impl;
   A"-cclib"; A ("-L" ^ llvm_prefix ^ "/lib");
   A"-cclib"; A "-lLLVMLinker";
-  A"-cclib"; A "-lLLVMipo"
+  A"-cclib"; A "-lLLVMipo";
+  A"-cclib"; A "-lLLVMVectorize";
+  A"-cclib"; A "-lLLVMArchive";
+  A"-cclib"; A "-lLLVMInterpreter";
+  A"-cclib"; A "-lLLVMX86AsmParser";
+  A"-cclib"; A "-lLLVMX86CodeGen";
+  A"-cclib"; A "-lLLVMSelectionDAG";
+  A"-cclib"; A "-lLLVMAsmPrinter";
+  A"-cclib"; A "-lLLVMMCParser";
+  A"-cclib"; A "-lLLVMX86Disassembler";
+  A"-cclib"; A "-lLLVMX86Desc";
+  A"-cclib"; A "-lLLVMX86AsmPrinter";
+  A"-cclib"; A "-lLLVMX86Utils";
+  A"-cclib"; A "-lLLVMX86Info";
+  A"-cclib"; A "-lLLVMBitReader";
+  A"-cclib"; A "-lLLVMBitWriter";
+  A"-cclib"; A "-lLLVMJIT";
+  A"-cclib"; A "-lLLVMRuntimeDyld";
+  A"-cclib"; A "-lLLVMExecutionEngine";
+  A"-cclib"; A "-lLLVMCodeGen";
+  A"-cclib"; A "-lLLVMScalarOpts";
+  A"-cclib"; A "-lLLVMInstCombine";
+  A"-cclib"; A "-lLLVMTransformUtils";
+  A"-cclib"; A "-lLLVMipa";
+  A"-cclib"; A "-lLLVMAnalysis";
+  A"-cclib"; A "-lLLVMTarget";
+  A"-cclib"; A "-lLLVMMC";
+  A"-cclib"; A "-lLLVMObject";
+  A"-cclib"; A "-lLLVMCore";
+  A"-cclib"; A "-lLLVMSupport"
 ] in
 (* PTX target libraries *)
 let ptx_llsupport_linkflags =
@@ -97,11 +126,11 @@ let ptx_llsupport_linkflags =
 List.flatten (
 List.map
 (fun fl -> [A"-cclib"; A fl])
-["-lLLVMPTXCodeGen"; "-lLLVMSelectionDAG"; "-lLLVMAsmPrinter";
+["-lLLVMNVPTXCodeGen"; "-lLLVMSelectionDAG"; "-lLLVMAsmPrinter";
  "-lLLVMMCParser"; "-lLLVMCodeGen"; "-lLLVMScalarOpts";
  "-lLLVMInstCombine"; "-lLLVMTransformUtils"; "-lLLVMipa"; 
- "-lLLVMAnalysis"; "-lLLVMPTXDesc"; "-lLLVMPTXInfo"; "-lLLVMTarget";
- "-lLLVMPTXAsmPrinter"; "-lLLVMMC"; "-lLLVMObject"; "-lLLVMBitReader"; 
+ "-lLLVMAnalysis"; "-lLLVMNVPTXDesc"; "-lLLVMNVPTXInfo"; "-lLLVMTarget";
+ "-lLLVMNVPTXAsmPrinter"; "-lLLVMMC"; "-lLLVMObject"; "-lLLVMBitReader"; 
  "-lLLVMCore"; "-lLLVMSupport"]
 ) in
  let 
@@ -146,18 +175,35 @@ rule "Generate initial modules"
           "buffer.h";
           "bitcode2cpp.py"]
   begin fun env build ->
+    let arch = env "%(arch)" in
+    let ccflags =
+      if arch = "x86" or arch = "ptx" then
+        ["-march=corei7"]
+      else if arch = "x86_avx" then
+        ["-march=corei7-avx"]
+      else if arch = "arm_android" || arch = "arm" then
+        ["-m32"]
+      else
+        []
+    in
     let llstub = env "architecture.%(arch).stdlib.ll" in
     let llstubs =
-      if (env "%(arch)") = "ptx" then
+      if arch = "ptx" then
         let x86_ll = "architecture.x86.stdlib.ll" in
         let x86_cpp = "architecture.x86.stdlib.cpp" in
         ignore (build [[x86_ll; x86_cpp]]);
         [llstub; x86_ll]
+      else if arch = "x86_avx" then
+        let x86_ll = "architecture.x86.stdlib.ll" in
+        let x86_cpp = "architecture.x86.stdlib.cpp" in
+        ignore (build [[x86_ll; x86_cpp]]);
+        [x86_ll; llstub]
       else [llstub]
     in
     let c =
     Cmd(S([
-      llvm_tool "clang"; A"-march=corei7-avx"; A"-emit-llvm"; A"-S"; P(env "architecture.%(arch).stdlib.cpp"); A"-o"; A"-";
+      A"clang"; A"-emit-llvm"; A"-O3"] @ (List.map (fun flag -> (A flag)) ccflags)
+      @ [A"-S"; P(env "architecture.%(arch).stdlib.cpp"); A"-o"; A"-";
       Sh " | ";
       A"grep"; A"-v"; A"^target triple";
       Sh " | ";
@@ -173,6 +219,5 @@ rule "Generate initial modules"
       Sh " > "; P(env "architecture.%(arch).initmod.c")
     ]))
     in
-    (* failwith (Command.to_string c); *)
     c
   end;;
