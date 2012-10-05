@@ -202,7 +202,7 @@ rule "Generate initial modules"
     in
     let c =
     Cmd(S([
-      A"clang"; A"-emit-llvm"; A"-O3"] @ (List.map (fun flag -> (A flag)) ccflags)
+      A"clang-mp-4.7"; A"-emit-llvm"; A"-O3"] @ (List.map (fun flag -> (A flag)) ccflags)
       @ [A"-S"; P(env "architecture.%(arch).stdlib.cpp"); A"-o"; A"-";
       Sh " | ";
       A"grep"; A"-v"; A"^target triple";
