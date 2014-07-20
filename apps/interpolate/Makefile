@@ -1,18 +1,15 @@
-ifneq ($(shell env -i command -v g++-4.7),)
-GXX ?= g++-4.7
-endif
-GXX ?= g++-4.6
+include ../support/Makefile.inc
 
-PNGFLAGS=$(shell libpng-config --ldflags) $(shell libpng-config --cflags)
-ifeq ($(HL_TARGET),ptx)
-  SCHEDULE=103
-  CUDA_LFLAGS=-L/usr/local/cuda/lib -lcuda
-else
-  SCHEDULE=12
-endif
+CXXFLAGS += -g -Wall
 
-all: interpolate
+.PHONY: clean
 
-interpolate: ../../cpp_bindings/ interpolate.cpp
-	$(MAKE) -C ../../cpp_bindings libHalide.a
-	$(GXX) -g interpolate.cpp -I../../support -I ../../cpp_bindings/ ../../cpp_bindings/libHalide.a  -std=c++0x -lpng -o interpolate -lpthread -ldl $(PNGFLAGS)
+interpolate: ../../ interpolate.cpp
+	$(MAKE) -C ../../ $(LIB_HALIDE)
+	$(CXX) $(CXXFLAGS) interpolate.cpp -I ../../include/ -I ../support ../../$(LIB_HALIDE) -o interpolate -lpthread -ldl -lz $(PNGFLAGS) $(CUDA_LDFLAGS) $(OPENCL_LDFLAGS) $(OPENGL_LDFLAGS) $(LDFLAGS)
+
+out.png: interpolate
+	./interpolate ../images/rgba.png out.png
+
+clean:
+	rm -f interpolate interpolate.h out.png

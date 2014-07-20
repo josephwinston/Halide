@@ -1,25 +1,25 @@
-ifneq ($(shell env -i command -v g++-4.7),)
-GXX ?= g++-4.7
-endif
-GXX ?= g++-4.6
+include ../support/Makefile.inc
 
-LLVM_ROOT=../../llvm/Release+Asserts
-LLC=$(LLVM_ROOT)/bin/llc
-OPT=$(LLVM_ROOT)/bin/opt
-PNGFLAGS=$(shell libpng-config --ldflags) $(shell libpng-config --cflags)
+all: test
 
-halide_blur: ../../cpp_bindings/ ../../src/ halide_blur.cpp
-	$(MAKE) -C ../../cpp_bindings libHalide.a
-	$(GXX) halide_blur.cpp -I ../../cpp_bindings/ ../../cpp_bindings/libHalide.a  -std=c++0x -o halide_blur -ldl -lpthread
+halide_blur: ../../ halide_blur.cpp
+	$(MAKE) -C ../../ $(LIB_HALIDE)
+	$(CXX) halide_blur.cpp -I ../../include ../../$(LIB_HALIDE) -o halide_blur -ldl -lpthread -lz $(LDFLAGS)
 
-halide_blur.bc: halide_blur
+halide_blur.o: halide_blur
 	./halide_blur
 
-halide_blur.o: halide_blur.bc
-	cat halide_blur.bc | $(OPT) -O3 | $(LLC) -O3 -filetype=obj > halide_blur.o
+# g++ on OS X might actually be system clang without openmp
+CXX_VERSION=$(shell $(CXX) --version)
+ifeq (,$(findstring clang,$(CXX_VERSION)))
+OPENMP_FLAGS=-fopenmp
+else
+OPENMP_FLAGS=
+endif
 
+# -O2 is faster than -O3 for this app (O3 unrolls too much)
 test: test.cpp halide_blur.o
-	$(GXX) -fopenmp -std=c++0x -lpng -Wall -O3 test.cpp halide_blur.o -o test -lpthread -ldl -lpng -L/usr/local/cuda/lib -lcuda  $(PNGFLAGS)
+	$(CXX) $(OPENMP_FLAGS) -msse2 -Wall -O2 -I ../support/ test.cpp halide_blur.o -o test -lpthread -ldl $(PNGFLAGS) $(CUDA_LDFLAGS) $(OPENCL_LDFLAGS) $(OPENGL_LDFLAGS)
 
 clean:
-	rm -f test halide_blur.o halide_blur.bc halide_blur
+	rm -f test halide_blur.o halide_blur

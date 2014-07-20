@@ -9,165 +9,203 @@ using namespace Halide;
 
 #include <sys/time.h>
 
+using std::vector;
+
 double now() {
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	static bool first_call = true;
-	static time_t first_sec = 0;
-	if (first_call) {
-		first_call = false;
-		first_sec = tv.tv_sec;
-	}
-	assert(tv.tv_sec >= first_sec);
-	return (tv.tv_sec - first_sec) + (tv.tv_usec / 1000000.0);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    static bool first_call = true;
+    static time_t first_sec = 0;
+    if (first_call) {
+        first_call = false;
+        first_sec = tv.tv_sec;
+    }
+    assert(tv.tv_sec >= first_sec);
+    return (tv.tv_sec - first_sec) + (tv.tv_usec / 1000000.0);
 }
 
 int main(int argc, char **argv) {
-	if (argc < 3) {
-		std::cerr << "Usage:\n\t./interpolate in.png out.png\n" << std::endl;
-		return 1;
-	}
+    if (argc < 3) {
+        std::cerr << "Usage:\n\t./interpolate in.png out.png\n" << std::endl;
+        return 1;
+    }
 
-	UniformImage input(Float(32), 3);
+    ImageParam input(Float(32), 3);
 
-	unsigned int levels = 10;
+    const int levels = 10;
 
-	Func downsampled[levels];
-	Func interpolated[levels];
-	Uniform< unsigned int > level_widths[levels];
-	Uniform< unsigned int > level_heights[levels];
-	Var x,y,c;
+    Func downsampled[levels];
+    Func downx[levels];
+    Func interpolated[levels];
+    Func upsampled[levels];
+    Func upsampledx[levels];
+    Var x("x"), y("y"), c("c");
 
-	downsampled[0](x,y) = (
-		input(x,y,0) * input(x,y,3),
-		input(x,y,1) * input(x,y,3),
-		input(x,y,2) * input(x,y,3),
-			input(x,y,3));
+    Func clamped;
+    clamped(x, y, c) = input(clamp(x, 0, input.width()-1), clamp(y, 0, input.height()-1), c);
 
-	//generate downsample levels:
-	for (unsigned int l = 1; l < levels; ++l) {
-		Func clamped;
-		clamped(x,y,c) = downsampled[l-1](clamp(cast<int>(x),cast<int>(0),cast<int>(level_widths[l-1]-1)), clamp(cast<int>(y),cast<int>(0),cast<int>(level_heights[l-1]-1)), c);
-		Func downx;
-		downx(x,y,c) = (clamped(x*2-1,y,c) + 2.0f * clamped(x*2,y,c) + clamped(x*2+1,y,c)) / 4.0f;
-		downsampled[l](x,y,c) = (downx(x,y*2-1,c) + 2.0f * downx(x,y*2,c) + downx(x,y*2+1,c)) / 4.0f;
-	}
-	interpolated[levels-1](x,y,c) = downsampled[levels-1](x,y,c);
-	//generate interpolated levels:
-	for (unsigned int l = levels-2; l < levels; --l) {
-		Func upsampledx, upsampled;
-		upsampledx(x,y,c) = 0.5f * (interpolated[l+1](x/2 + (x%2),y,c) + interpolated[l+1](x/2,y,c));
-		upsampled(x,y,c) = 0.5f * (upsampledx(x, y/2 + (y%2),c) + upsampledx(x,y/2,c));
-		interpolated[l](x,y,c) = downsampled[l](x,y,c) + (1.0f - downsampled[l](x,y,3)) * upsampled(x,y,c);
-	}
+    // This triggers a bug in llvm 3.3 (3.2 and trunk are fine), so we
+    // rewrite it in a way that doesn't trigger the bug. The rewritten
+    // form assumes the input alpha is zero or one.
+    // downsampled[0](x, y, c) = select(c < 3, clamped(x, y, c) * clamped(x, y, 3), clamped(x, y, 3));
+    downsampled[0](x, y, c) = clamped(x, y, c) * clamped(x, y, 3);
 
-	Func final;
-	final(x,y) = (
-		interpolated[0](x,y,0) / interpolated[0](x,y,3),
-		interpolated[0](x,y,1) / interpolated[0](x,y,3),
-		interpolated[0](x,y,2) / interpolated[0](x,y,3),
-			1.0f/*interpolated[0](x,y,3)*/);
-	
-	std::cout << "Finished function setup." << std::endl;
+    for (int l = 1; l < levels; ++l) {
+        Func prev = downsampled[l-1];
 
+        if (l == 4) {
+            // Also add a boundary condition at a middle pyramid level
+            // to prevent the footprint of the downsamplings to extend
+            // too far off the base image. Otherwise we look 512
+            // pixels off each edge.
+            Expr w = input.width()/(1 << l);
+            Expr h = input.height()/(1 << l);
+            prev = lambda(x, y, c, prev(clamp(x, 0, w), clamp(y, 0, h), c));
+        }
 
+        downx[l](x, y, c) = (prev(x*2-1, y, c) +
+                             2.0f * prev(x*2, y, c) +
+                             prev(x*2+1, y, c)) * 0.25f;
+        downsampled[l](x, y, c) = (downx[l](x, y*2-1, c) +
+                                   2.0f * downx[l](x, y*2, c) +
+                                   downx[l](x, y*2+1, c)) * 0.25f;
+    }
+    interpolated[levels-1](x, y, c) = downsampled[levels-1](x, y, c);
+    for (int l = levels-2; l >= 0; --l) {
+        upsampledx[l](x, y, c) = (interpolated[l+1](x/2, y, c) +
+                                  interpolated[l+1]((x+1)/2, y, c)) / 2.0f;
+        upsampled[l](x, y, c) =  (upsampledx[l](x, y/2, c) +
+                                  upsampledx[l](x, (y+1)/2, c)) / 2.0f;
+        interpolated[l](x, y, c) = downsampled[l](x, y, c) + (1.0f - downsampled[l](x, y, 3)) * upsampled[l](x, y, c);
+    }
 
-	int sched = 3;
-	switch (sched) {
-	case 0:
-	{
-		std::cout << "Flat schedule." << std::endl;
-		//schedule:
-		for (unsigned int l = 0; l < levels; ++l) {
-			downsampled[l].root();
-			interpolated[l].root();
-		}
-		final.root();
-		break;
-	}
-	case 1:
-	{
-		std::cout << "Flat schedule with vectorization." << std::endl;
-		for (unsigned int l = 0; l < levels; ++l) {
-			downsampled[l].root().vectorize(x,4);
-			interpolated[l].root().vectorize(x,4);
-		}
-		final.root();
-		break;
-	}
-	case 2:
-	{
-		std::cout << "Flat schedule with parallelization + vectorization." << std::endl;
-		for (unsigned int l = 0; l < levels; ++l) {
-			if (l + 2 < levels) {
-				Var yo,yi;
-				downsampled[l].root().split(y,yo,yi,4).parallel(yo).vectorize(x,4);
-				interpolated[l].root().split(y,yo,yi,4).parallel(yo).vectorize(x,4);
-			} else {
-				downsampled[l].root();
-				interpolated[l].root();
-			}
-		}
-		final.root();
-		break;
-	}
-	case 3:
-	{
-		std::cout << "Flat schedule with vectorization sometimes." << std::endl;
-		for (unsigned int l = 0; l < levels; ++l) {
-			if (l + 4 < levels) {
-				Var yo,yi;
-				downsampled[l].root().vectorize(x,4);
-				interpolated[l].root().vectorize(x,4);
-			} else {
-				downsampled[l].root();
-				interpolated[l].root();
-			}
-		}
-		final.root();
-		break;
-	}
+    Func normalize("normalize");
+    normalize(x, y, c) = interpolated[0](x, y, c) / interpolated[0](x, y, 3);
 
+    Func final("final");
+    final(x, y, c) = normalize(x, y, c);
 
-	default:
-		assert(0 && "No schedule with this number.");
-	}
+    std::cout << "Finished function setup." << std::endl;
 
-	final.compileJIT();
+    int sched;
+    Target target = get_target_from_environment();
+    if (target.has_gpu_feature()) {
+        sched = 4;
+    } else {
+        sched = 2;
+    }
 
-	std::cout << "Running... " << std::endl;
-	double min = std::numeric_limits< double >::infinity();
-	const unsigned int Iters = 20;
-	for (unsigned int x = 0; x < Iters; ++x) {
+    switch (sched) {
+    case 0:
+    {
+        std::cout << "Flat schedule." << std::endl;
+        for (int l = 0; l < levels; ++l) {
+            downsampled[l].compute_root();
+            interpolated[l].compute_root();
+        }
+        final.compute_root();
+        break;
+    }
+    case 1:
+    {
+        std::cout << "Flat schedule with vectorization." << std::endl;
+        for (int l = 0; l < levels; ++l) {
+            downsampled[l].compute_root().vectorize(x,4);
+            interpolated[l].compute_root().vectorize(x,4);
+        }
+        final.compute_root();
+        break;
+    }
+    case 2:
+    {
+        Var xi, yi;
+        std::cout << "Flat schedule with parallelization + vectorization." << std::endl;
+        clamped.compute_root().parallel(y).bound(c, 0, 4).reorder(c, x, y).reorder_storage(c, x, y).vectorize(c, 4);
+        for (int l = 1; l < levels-1; ++l) {
+            if (l > 0) downsampled[l].compute_root().parallel(y).reorder(c, x, y).reorder_storage(c, x, y).vectorize(c, 4);
+            interpolated[l].compute_root().parallel(y).reorder(c, x, y).reorder_storage(c, x, y).vectorize(c, 4);
+            interpolated[l].unroll(x, 2).unroll(y, 2);
+        }
+        final.reorder(c, x, y).bound(c, 0, 3).parallel(y);
+        final.tile(x, y, xi, yi, 2, 2).unroll(xi).unroll(yi);
+        final.bound(x, 0, input.width());
+        final.bound(y, 0, input.height());
+        break;
+    }
+    case 3:
+    {
+        std::cout << "Flat schedule with vectorization sometimes." << std::endl;
+        for (int l = 0; l < levels; ++l) {
+            if (l + 4 < levels) {
+                Var yo,yi;
+                downsampled[l].compute_root().vectorize(x,4);
+                interpolated[l].compute_root().vectorize(x,4);
+            } else {
+                downsampled[l].compute_root();
+                interpolated[l].compute_root();
+            }
+        }
+        final.compute_root();
+        break;
+    }
+    case 4:
+    {
+        std::cout << "GPU schedule." << std::endl;
 
-        Image< float > in_png = load< float >(argv[1]);
-        assert(in_png.channels() == 4);
-        input = in_png;
+        // Some gpus don't have enough memory to process the entire
+        // image, so we process the image in tiles.
+        Var yo, yi, xo, xi;
+        final.reorder(c, x, y).bound(c, 0, 3).vectorize(x, 4);
+        final.tile(x, y, xo, yo, xi, yi, input.width()/8, input.height()/8);
+        normalize.compute_at(final, xo).reorder(c, x, y).gpu_tile(x, y, 16, 16, GPU_Default).unroll(c);
 
-		{ //set up level sizes:
-			unsigned int width = in_png.width();
-			unsigned int height = in_png.height();
-			for (unsigned int l = 0; l < levels; ++l) {
-				level_widths[l] = width;
-				level_heights[l] = height;
-				width = width / 2 + 1;
-				height = height / 2 + 1;
-			}
-		}
+        // Start from level 1 to save memory - level zero will be computed on demand
+        for (int l = 1; l < levels; ++l) {
+            int tile_size = 32 >> l;
+            if (tile_size < 1) tile_size = 1;
+            if (tile_size > 8) tile_size = 8;
+            downsampled[l].compute_root();
+            if (false) {
+                // Outer loop on CPU for the larger ones.
+                downsampled[l].tile(x, y, xo, yo, x, y, 256, 256);
+            }
+            downsampled[l].gpu_tile(x, y, c, tile_size, tile_size, 4, GPU_Default);
+            interpolated[l].compute_at(final, xo).gpu_tile(x, y, c, tile_size, tile_size, 4, GPU_Default);
+        }
+        break;
+    }
+    default:
+        assert(0 && "No schedule with this number.");
+    }
 
-		double before = now();
-		Image< float > out = final.realize(in_png.width(), in_png.height(), 4);
-		double after = now();
-		double amt = after - before;
-		std::cout << "   " << amt * 1000 << std::endl;
-		if (amt < min) min = amt;
+    // JIT compile the pipeline eagerly, so we don't interfere with timing
+    final.compile_jit(target);
 
-		if (x + 1 == Iters) {
-			Image< float > out = final.realize(in_png.width(), in_png.height(), 4);
-			save(out, argv[2]);
-		}
-	}
-	std::cout << " took " << min * 1000 << " msec." << std::endl;
+    Image<float> in_png = load<float>(argv[1]);
+    Image<float> out(in_png.width(), in_png.height(), 3);
+    assert(in_png.channels() == 4);
+    input.set(in_png);
 
+    std::cout << "Running... " << std::endl;
+    double min = std::numeric_limits<double>::infinity();
+    const int iters = 20;
+
+    for (int x = 0; x < iters; ++x) {
+        double before = now();
+        final.realize(out);
+        double after = now();
+        double amt = after - before;
+
+        std::cout << "   " << amt * 1000 << std::endl;
+        if (amt < min) min = amt;
+
+    }
+    std::cout << " took " << min * 1000 << " msec." << std::endl;
+
+    vector<Argument> args;
+    args.push_back(input);
+    final.compile_to_assembly("test.s", args, target);
+
+    save(out, argv[2]);
 
 }

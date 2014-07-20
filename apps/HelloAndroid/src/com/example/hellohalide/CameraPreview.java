@@ -11,108 +11,113 @@ import android.graphics.Canvas;
 import android.graphics.ImageFormat;
 
 /** A basic Camera preview class */
-public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback, Camera.PreviewCallback {
+public class CameraPreview extends SurfaceView
+    implements SurfaceHolder.Callback, Camera.PreviewCallback {
     private static final String TAG = "CameraPreview";
 
-    private SurfaceHolder mHolder;
     private Camera mCamera;
     private SurfaceView mFiltered;
-    private byte[] previewData;
-    private int[] filteredData;
+    private byte[] mPreviewData;
 
+    // Link to native Halide code
     static {
         System.loadLibrary("native");
     }
+    private static native void processFrame(byte[] src, int w, int h, Surface dst);
 
-    private static native void processFrame(byte[] src, Surface dst);
-
-    public CameraPreview(Context context, Camera camera, SurfaceView filtered) {
+    public CameraPreview(Context context, SurfaceView filtered) {
         super(context);
-        mCamera = camera;
         mFiltered = filtered;
         mFiltered.getHolder().setFormat(ImageFormat.YV12);
-
-        previewData = new byte[640*480 + 320*240*2];
+        mPreviewData = null;
 
         // Install a SurfaceHolder.Callback so we get notified when the
         // underlying surface is created and destroyed.
-        mHolder = getHolder();
-        mHolder.addCallback(this);
-
+        getHolder().addCallback(this);
     }
 
     public void onPreviewFrame(byte[] data, Camera camera) {
-        if (mFiltered.getHolder().getSurface().isValid()) {
-            processFrame(data, mFiltered.getHolder().getSurface());
-            /*
-
-            Canvas canvas = mFiltered.getHolder().lockCanvas();
-
-            if (canvas != null) {
-                //canvas.drawBitmap(filteredData, 0, 640, 0, 0, 640, 360, false, null);
-                //canvas.drawBitmap(data, 0, 640, 0, 0, 640, 360, false, null);
-                //mFiltered.getHolder().unlockCanvasAndPost(canvas);
-
-            } else {
-                Log.d(TAG, "canvas was null");
-            }
-            */
+        if (camera != mCamera) {
+            Log.d(TAG, "Unknown Camera!");
+            return;
         }
-        
+        if (mFiltered.getHolder().getSurface().isValid()) {
+            Camera.Size s = camera.getParameters().getPreviewSize();
+            processFrame(data, s.width, s.height, mFiltered.getHolder().getSurface());
+        } else {
+            Log.d(TAG, "Invalid Surface!");
+        }
+
         // re-enqueue this buffer
-        mCamera.addCallbackBuffer(data);
+        camera.addCallbackBuffer(data);
     }
 
-    public void surfaceCreated(SurfaceHolder holder) {
-        // The Surface has been created, now tell the camera where to draw the preview.
+    private void startPreview(SurfaceHolder holder) {
+        if (mCamera == null) {
+            return;
+        }
         try {
-            mCamera.addCallbackBuffer(previewData);
-            Camera.Parameters p = mCamera.getParameters();
-            p.setPreviewFormat(ImageFormat.YV12);
-            mCamera.setParameters(p);
+            configureCamera();
             mCamera.setPreviewCallbackWithBuffer(this);
             mCamera.setPreviewDisplay(holder);
             mCamera.startPreview();
-        } catch (IOException e) {
-            Log.d(TAG, "Error setting camera preview: " + e.getMessage());
+        } catch (Exception e){
+            Log.d(TAG, "Error starting camera preview: " + e.getMessage());
         }
+    }
+
+    private void stopPreview() {
+        if (mCamera == null) {
+            return;
+        }
+        try {
+              mCamera.stopPreview();
+        } catch (Exception e){
+              // ignore: tried to stop a non-existent preview
+              Log.d(TAG, "tried to stop a non-existent preview");
+        }
+    }
+    private void configureCamera() {
+        Camera.Parameters p = mCamera.getParameters();
+        Camera.Size s = p.getPreviewSize();
+        Log.d(TAG, "Camera Preview Size: " + s.width + "x" + s.height);
+        p.setPreviewFormat(ImageFormat.YV12);
+        if (mPreviewData == null) {
+            int stride = ((s.width + 15) / 16) * 16;
+            int y_size = stride * s.height;
+            int c_stride = ((stride/2 + 15) / 16) * 16;
+            int c_size = c_stride * s.height/2;
+            int size = y_size + c_size * 2;
+            mPreviewData = new byte[size];
+        }
+        mCamera.addCallbackBuffer(mPreviewData);
+        mCamera.setParameters(p);
+    }
+
+    public void surfaceCreated(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceCreated");
+        startPreview(holder);
     }
 
     public void surfaceDestroyed(SurfaceHolder holder) {
-        // empty. Take care of releasing the Camera preview in your activity.
+        Log.d(TAG, "surfaceDestroyed");
+        stopPreview();
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
-        // If your preview can change or rotate, take care of those events here.
-        // Make sure to stop the preview before resizing or reformatting it.
+        Log.d(TAG, "surfaceChanged");
+        stopPreview();
+        configureCamera();
+        startPreview(holder);
+    }
 
-        if (mHolder.getSurface() == null){
-          // preview surface does not exist
-          return;
-        }
-
-        // stop preview before making changes
-        try {
+    public void setCamera(Camera c) {
+        if (mCamera != null) {
             mCamera.stopPreview();
-        } catch (Exception e){
-          // ignore: tried to stop a non-existent preview
         }
-
-        // set preview size and make any resize, rotate or
-        // reformatting changes here
-
-        // start preview with new settings
-        try {
-            mCamera.addCallbackBuffer(previewData);
-            Camera.Parameters p = mCamera.getParameters();
-            p.setPreviewFormat(ImageFormat.YV12);
-            mCamera.setParameters(p);
-            mCamera.setPreviewCallbackWithBuffer(this);
-            mCamera.setPreviewDisplay(mHolder);
-            mCamera.startPreview();
-
-        } catch (Exception e){
-            Log.d(TAG, "Error starting camera preview: " + e.getMessage());
+        mCamera = c;
+        if (mCamera != null) {
+            startPreview(getHolder());
         }
     }
 }

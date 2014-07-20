@@ -1,10 +1,12 @@
-android update project -p .
-cd jni && \
-c++ halide.cpp -L ../../../cpp_bindings/ -lHalide -I ../../../cpp_bindings/ -ldl -lpthread &&  \
-./a.out &&  \
-cat halide.bc | opt -O3 -always-inline | llc -O3 -mattr=+neon -o halide.s && 
-cd .. &&  \
-~/android-ndk-r8b/ndk-build && \
-ant debug &&  \
-adb install -r bin/HelloAndroid-debug.apk && \
+#!/bin/bash
+set -e
+android update project -p . --target android-17
+cd jni
+c++ halide.cpp -L ../../../bin -lHalide -I ../../../include -ldl -lpthread -lz
+HL_TARGET=arm-32-android DYLD_LIBRARY_PATH=../../../bin LD_LIBRARY_PATH=../../../bin ./a.out
+cd ..
+pwd
+ndk-build
+ant debug
+adb install -r bin/HelloAndroid-debug.apk
 adb logcat

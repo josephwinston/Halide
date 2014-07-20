@@ -1,28 +1,31 @@
-CXX=g++
+include ../support/Makefile.inc
 
-PNGFLAGS=$(shell libpng-config --ldflags) $(shell libpng-config --cflags)
 ifeq ($(HL_TARGET),ptx)
   SCHEDULE=100
-  CUDA_LFLAGS=-L/usr/local/cuda/lib -lcuda
 else
   SCHEDULE=0
 endif
 
-camera_pipe: ../../cpp_bindings/ ../../src/ camera_pipe.cpp
-	$(MAKE) -C ../../cpp_bindings libHalide.a
-	$(CXX) -g camera_pipe.cpp -I ../../cpp_bindings/ ../../cpp_bindings/libHalide.a -o camera_pipe -ldl -lpthread
+all: process
 
-curved.bc: camera_pipe
+camera_pipe: ../../ camera_pipe.cpp
+	$(MAKE) -C ../../ $(LIB_HALIDE)
+	$(CXX) camera_pipe.cpp -I ../../include/ -g ../../$(LIB_HALIDE) -o camera_pipe -ldl -lpthread -lz $(LDFLAGS)
+
+curved.o: camera_pipe
 	./camera_pipe 8 0 # 8-bit output,
 
-curved.o: curved.bc
-	cat curved.bc | opt -O3 | llc -O3 -filetype=obj > curved.o
+fcam/Demosaic.o: fcam/Demosaic.cpp fcam/Demosaic.h
+	$(CXX) -c -I../support -Wall -fopenmp -O3 $< -o $@
 
-process: process.cpp curved.o
-	$(CXX) -I../../support -Wall -O3 process.cpp curved.o -o process -lpthread -ldl $(CUDA_LFLAGS) $(PNGFLAGS)
+fcam/Demosaic_ARM.o: fcam/Demosaic_ARM.cpp fcam/Demosaic_ARM.h
+	$(CXX) -c -mfpu=neon -I../support -Wall -fopenmp -O3 $< -o $@
 
-out.png: process raw.png
-	./process raw.png 3700 2.0 50 out.png
+process: process.cpp curved.o fcam/Demosaic.o fcam/Demosaic_ARM.o
+	$(CXX) -I../support -Wall -O3 $^ -o $@ -lpthread -ldl -fopenmp $(CUDA_LDFLAGS) $(OPENCL_LDFLAGS) $(OPENGL_LDFLAGS) $(PNGFLAGS)
+
+out.png: process
+	./process ../images/bayer_raw.png 3700 2.0 50 out.png
 
 clean:
-	rm -f out.png process curved.o curved.bc camera_pipe
+	rm -f out.png process curved.o camera_pipe
