@@ -159,22 +159,12 @@ void IRMutator::visit(const LetStmt *op) {
 
 void IRMutator::visit(const AssertStmt *op) {
     Expr condition = mutate(op->condition);
+    Expr message = mutate(op->message);
 
-    vector<Expr > new_args(op->args.size());
-    bool changed = false;
-
-    // Mutate the args
-    for (size_t i = 0; i < op->args.size(); i++) {
-        Expr old_arg = op->args[i];
-        Expr new_arg = mutate(old_arg);
-        if (!new_arg.same_as(old_arg)) changed = true;
-        new_args[i] = new_arg;
-    }
-
-    if (condition.same_as(op->condition) && !changed) {
+    if (condition.same_as(op->condition) && message.same_as(op->message)) {
         stmt = op;
     } else {
-        stmt = AssertStmt::make(condition, op->message, new_args);
+        stmt = AssertStmt::make(condition, message);
     }
 }
 
@@ -200,7 +190,7 @@ void IRMutator::visit(const For *op) {
         body.same_as(op->body)) {
         stmt = op;
     } else {
-        stmt = For::make(op->name, min, extent, op->for_type, body);
+        stmt = For::make(op->name, min, extent, op->for_type, op->device_api, body);
     }
 }
 
@@ -209,7 +199,9 @@ void IRMutator::visit(const Store *op) {
     Expr index = mutate(op->index);
     if (value.same_as(op->value) && index.same_as(op->index)) {
         stmt = op;
-    } else stmt = Store::make(op->name, value, index);
+    } else {
+        stmt = Store::make(op->name, value, index);
+    }
 }
 
 void IRMutator::visit(const Provide *op) {

@@ -1,11 +1,11 @@
 #ifndef HALIDE_HALIDERUNTIME_H
 #define HALIDE_HALIDERUNTIME_H
 
-#ifdef COMPILING_HALIDE
-#include "mini_stdint.h"
-#else
+#ifndef COMPILING_HALIDE_RUNTIME
 #include <stddef.h>
 #include <stdint.h>
+#else
+#include "runtime_internal.h"
 #endif
 
 #ifdef __cplusplus
@@ -27,7 +27,7 @@ extern "C" {
  *
  * All of these functions take a "void *user_context" parameter as their
  * first argument; if the Halide kernel that calls back to any of these
- * funcions has been defined with a "__user_context" parameter XXXXXXXX,
+ * functions has been compiled with the UserContext feature set on its Target,
  * then the value of that pointer passed from the code that calls the
  * Halide kernel is piped through to the function.
  *
@@ -43,35 +43,44 @@ extern "C" {
  *
  */
 
-/** Define halide_printf to catch debugging output, informational
-  * messages, etc. Main use is to support HL_TRACE functionality and
-  * PrintStmt in IR. Also called by the default halide_error
-  * implementation.
-  *
-  * This function is implemented using \ref halide_print.
-  */
-extern int halide_printf(void *user_context, const char *, ...);
-
-/** Unformatted print used to support halide_printf. This function
- * can be replaced in JITed code by using halide_custom_print
- * and providing an implementation of halide_print in AOT code. See
- * Func::set_custom_print.
+/** Print a message to stderr. Main use is to support HL_TRACE
+ * functionality, print, and print_when calls. Also called by the default
+ * halide_error.  This function can be replaced in JITed code by using
+ * halide_custom_print and providing an implementation of halide_print
+ * in AOT code. See Func::set_custom_print.
  */
 extern void halide_print(void *user_context, const char *);
 
-/** Define halide_error to catch errors messages at runtime, for
- * example bounds checking failures. This function can be replaced
- * in JITed code by using halide_set_error_handler and providing an
+/** Define halide_error to catch errors messages at runtime (for
+ * example bounds checking failures). This function can be replaced in
+ * JITed code by using halide_set_error_handler and providing an
  * implementation of halide_error in AOT code. See
  * Func::set_error_handler.
  */
-//@{
 extern void halide_error(void *user_context, const char *);
-extern void halide_error_varargs(void *user_context, const char *, ...);
-//@}
 
 /** A macro that calls halide_error if the supplied condition is false. */
 #define halide_assert(user_context, cond) if (!(cond)) halide_error(user_context, #cond);
+
+/** These are allocated statically inside the runtime, hence the fixed
+ * size. They must be initialized with zero. The first time
+ * halide_mutex_lock is called, the lock must be initialized in a
+ * thread safe manner. This incurs a small overhead for a once
+ * mechanism, but makes the lock reliably easy to setup and use
+ * without depending on e.g. C++ constructor logic.
+ */
+struct halide_mutex {
+    uint64_t _private[8];
+};
+
+/** A basic set of mutex functions, which call platform specific code
+ * for mutual exclusion.
+ */
+//@{
+extern void halide_mutex_lock(struct halide_mutex *mutex);
+extern void halide_mutex_unlock(struct halide_mutex *mutex);
+extern void halide_mutex_cleanup(struct halide_mutex *mutex_arg);
+//@}
 
 /** Define halide_do_par_for to replace the default thread pool
  * implementation. halide_shutdown_thread_pool can also be called to
@@ -191,72 +200,37 @@ extern int halide_get_trace_file(void *user_context);
  * (flushing the trace). Returns zero on success. */
 extern int halide_shutdown_trace();
 
+/** All Halide GPU or device backend implementations much provide an interface
+ * to be used with halide_device_malloc, etc.
+ */
+struct halide_device_interface;
+
 /** Release all data associated with the current GPU backend, in particular
  * all resources (memory, texture, context handles) allocated by Halide. Must
  * be called explicitly when using AOT compilation. */
-extern void halide_release(void *user_context);
+extern void halide_device_release(void *user_context, const halide_device_interface *interface);
 
 /** Copy image data from device memory to host memory. This must be called
  * explicitly to copy back the results of a GPU-based filter. */
 extern int halide_copy_to_host(void *user_context, struct buffer_t *buf);
 
-/** Copy image data from host memory to device memory. This should not be
- * called directly; Halide handles copying to the device automatically. */
-extern int halide_copy_to_dev(void *user_context, struct buffer_t *buf);
+/** Copy image data from host memory to device memory. This should not
+ * be called directly; Halide handles copying to the device
+ * automatically.  If interface is NULL and the bug has a non-zero dev
+ * field, the device associated with the dev handle will be
+ * used. Otherwise if the dev field is 0 and interface is NULL, an
+ * error is returned. */
+extern int halide_copy_to_device(void *user_context, struct buffer_t *buf,
+                                 const halide_device_interface *interface);
 
 /** Wait for current GPU operations to complete. Calling this explicitly
  * should rarely be necessary, except maybe for profiling. */
-extern int halide_dev_sync(void *user_context);
+extern int halide_device_sync(void *user_context, struct buffer_t *buf);
 
 /** Allocate device memory to back a buffer_t. */
-extern int halide_dev_malloc(void *user_context, struct buffer_t *buf);
+extern int halide_device_malloc(void *user_context, struct buffer_t *buf, const halide_device_interface *interface);
 
-/** Free any device memory associated with a buffer_t. */
-extern int halide_dev_free(void *user_context, struct buffer_t *buf);
-
-/** These are forward declared here to ensure they have the same
- * signature across different Halide gpu backends. Do not call
- * them. */
-// @{
-extern int halide_init_kernels(void *user_context, void **state_ptr,
-                               const char *src, int size);
-extern int halide_dev_run(void *user_context,
-                          void *state_ptr,
-                          const char *entry_name,
-                          int blocksX, int blocksY, int blocksZ,
-                          int threadsX, int threadsY, int threadsZ,
-                          int shared_mem_bytes,
-                          size_t arg_sizes[],
-                          void *args[]);
-// @}
-
-/** Set the platform name for OpenCL to use (e.g. "Intel" or
- * "NVIDIA"). The argument is copied internally. The opencl runtime
- * will select a platform that includes this as a substring. If never
- * called, Halide uses the environment variable HL_OCL_PLATFORM_NAME,
- * or defaults to the first available platform. */
-extern void halide_set_ocl_platform_name(const char *n);
-
-/** Halide calls this to get the desired OpenCL platform
- * name. Implement this yourself to use a different platform per
- * user_context. The default implementation returns the value set by
- * halide_set_ocl_platform_name, or the value of the environment
- * variable HL_OCL_PLATFORM_NAME. The output is valid until the next
- * call to halide_set_ocl_platform_name. */
-extern const char *halide_get_ocl_platform_name(void *user_context);
-
-/** Set the device type for OpenCL to use. The argument is copied
- * internally. It must be "cpu" or "gpu". If never called, Halide uses
- * the environment variable HL_OCL_DEVICE_TYPE. */
-extern void halide_set_ocl_device_type(const char *n);
-
-/** Halide calls this to gets the desired OpenCL device
- * type. Implement this yourself to use a different device type per
- * user_context. The default implementation returns the value set by
- * halide_set_ocl_device_type, or the environment variable
- * HL_OCL_DEVICE_TYPE. The result is valid until the next call to
- * halide_set_ocl_device_type. */
-extern const char *halide_get_ocl_device_type(void *user_context);
+extern int halide_device_free(void *user_context, struct buffer_t *buf);
 
 /** Selects which gpu device to use. 0 is usually the display
  * device. If never called, Halide uses the environment variable
@@ -271,9 +245,112 @@ extern void halide_set_gpu_device(int n);
  * HL_GPU_DEVICE. */
 extern int halide_get_gpu_device(void *user_context);
 
+/** Set the soft maximum amount of memory, in bytes, that the LRU
+ *  cache will use to memoize Func results.  This is not a strict
+ *  maximum in that concurrency and simultaneous use of memoized
+ *  reults larger than the cache size can both cause it to
+ *  temporariliy be larger than the size specified here.
+ */
+extern void halide_memoization_cache_set_size(int64_t size);
+
+/** Given a cache key for a memoized result, currently constructed
+ *  from the Func name and top-level Func name plus the arguments of
+ *  the computation, determine if the result is in the cache and
+ *  return it if so. (The internals of the cache key should be
+ *  considered opaque by this function.) If this routine returns true,
+ *  it is a cache miss. Otherwise, it will return false and the
+ *  buffers passed in will be filled, via copying, with memoized
+ *  data. The last argument is a list if buffer_t pointers which
+ *  represents the outputs of the memoized Func. If the Func does not
+ *  return a Tuple, there will only be one buffer_t in the list. The
+ *  tuple_count parameters determines the length of the list.
+ */
+extern bool halide_memoization_cache_lookup(void *user_context, const uint8_t *cache_key, int32_t size,
+                                            buffer_t *realized_bounds, int32_t tuple_count, buffer_t **tuple_buffers);
+
+/** Given a cache key for a memoized result, currently constructed
+ *  from the Func name and top-level Func name plus the arguments of
+ *  the computation, store the result in the cache for futre access by
+ *  halide_memoization_cache_lookup. (The internals of the cache key
+ *  should be considered opaque by this function.) Data is copied out
+ *  from the inputs and inputs are unmodified. The last argument is a
+ *  list if buffer_t pointers which represents the outputs of the
+ *  memoized Func. If the Func does not return a Tuple, there will
+ *  only be one buffer_t in the list. The tuple_count parameters
+ *  determines the length of the list.
+ */
+extern void halide_memoization_cache_store(void *user_context, const uint8_t *cache_key, int32_t size,
+                                           buffer_t *realized_bounds, int32_t tuple_count, buffer_t **tuple_buffers);
+
+/** Free all memory and resources associated with the memoization cache.
+ * Must be called at a time when no other threads are accessing the cache.
+ */
+extern void halide_memoization_cache_cleanup();
+
+/** Types in the halide type system. They can be ints, unsigned ints,
+ * or floats (of various bit-widths), or a handle (which is always pointer-sized).
+ * Note that the int/uint/float values do not imply a specific bit width
+ * (the bit width is expected to be encoded in a separate value).
+ */
+typedef enum halide_type_code_t {
+    halide_type_int = 0,   //!< signed integers
+    halide_type_uint = 1,  //!< unsigned integers
+    halide_type_float = 2, //!< floating point numbers
+    halide_type_handle = 3 //!< opaque pointer type (void *)
+} halide_type_code_t;
+
+#ifndef BUFFER_T_DEFINED
+#define BUFFER_T_DEFINED
+
+/**
+ * The raw representation of an image passed around by generated
+ * Halide code. It includes some stuff to track whether the image is
+ * not actually in main memory, but instead on a device (like a
+ * GPU). */
+typedef struct buffer_t {
+  /** A device-handle for e.g. GPU memory used to back this buffer. */
+  uint64_t dev;
+
+  /** A pointer to the start of the data in main memory. */
+  uint8_t* host;
+
+  /** The size of the buffer in each dimension. */
+  int32_t extent[4];
+
+  /** Gives the spacing in memory between adjacent elements in the
+   * given dimension.  The correct memory address for a load from
+   * this buffer at position x, y, z, w is:
+   * host + (x * stride[0] + y * stride[1] + z * stride[2] + w * stride[3]) * elem_size
+   * By manipulating the strides and extents you can lazily crop,
+   * transpose, and even flip buffers without modifying the data.
+   */
+  int32_t stride[4];
+
+  /** Buffers often represent evaluation of a Func over some
+   * domain. The min field encodes the top left corner of the
+   * domain. */
+  int32_t min[4];
+
+  /** How many bytes does each buffer element take. This may be
+   * replaced with a more general type code in the future. */
+  int32_t elem_size;
+
+  /** This should be true if there is an existing device allocation
+   * mirroring this buffer, and the data has been modified on the
+   * host side. */
+  bool host_dirty;
+
+  /** This should be true if there is an existing device allocation
+   mirroring this buffer, and the data has been modified on the
+   device side. */
+  bool dev_dirty;
+} buffer_t;
+
+#endif
+
+
 #ifdef __cplusplus
 } // End extern "C"
 #endif
 
 #endif // HALIDE_HALIDERUNTIME_H
-

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <map>
 
 #include "IRMatch.h"
 #include "IREquality.h"
@@ -8,6 +9,8 @@ namespace Halide {
 namespace Internal {
 
 using std::vector;
+using std::map;
+using std::string;
 
 void expr_match_test() {
     vector<Expr> matches;
@@ -47,13 +50,23 @@ void expr_match_test() {
 class IRMatch : public IRVisitor {
 public:
     bool result;
-    vector<Expr> &matches;
+    vector<Expr> *matches;
+    map<string, Expr> *var_matches;
     Expr expr;
 
-    IRMatch(Expr e, vector<Expr> &m) : result(true), matches(m), expr(e) {
+    IRMatch(Expr e, vector<Expr> &m) : result(true), matches(&m), var_matches(NULL), expr(e) {
+    }
+    IRMatch(Expr e, map<string, Expr> &m) : result(true), matches(NULL), var_matches(&m), expr(e) {
     }
 
     using IRVisitor::visit;
+
+    bool types_match(Type pattern_type, Type expr_type) {
+        bool bits_matches  = (pattern_type.bits  == -1) || (pattern_type.bits  == expr_type.bits);
+        bool width_matches = (pattern_type.width == -1) || (pattern_type.width == expr_type.width);
+        bool code_matches  = (pattern_type.code  == expr_type.code);
+        return bits_matches && width_matches && code_matches;
+    }
 
     void visit(const IntImm *op) {
         const IntImm *e = expr.as<IntImm>();
@@ -71,7 +84,7 @@ public:
 
     void visit(const Cast *op) {
         const Cast *e = expr.as<Cast>();
-        if (result && e && e->type == op->type) {
+        if (result && e && types_match(op->type, e->type)) {
             expr = e->value;
             op->value.accept(this);
         } else {
@@ -80,13 +93,26 @@ public:
     }
 
     void visit(const Variable *op) {
-        if (op->type != expr.type()) {
+        if (!result) {
+            return;
+        }
+
+        if (!types_match(op->type, expr.type())) {
             result = false;
-        } else if (op->name == "*") {
-            matches.push_back(expr);
-        } else if (result) {
-            const Variable *e = expr.as<Variable>();
-            result = e && (e->name == op->name);
+        } else if (matches) {
+            if (op->name == "*") {
+                matches->push_back(expr);
+            } else {
+                const Variable *e = expr.as<Variable>();
+                result = e && (e->name == op->name);
+            }
+        } else if (var_matches) {
+            Expr &match = (*var_matches)[op->name];
+            if (match.defined()) {
+                result = equal(match, expr);
+            } else {
+                match = expr;
+            }
         }
     }
 
@@ -145,7 +171,7 @@ public:
 
     void visit(const Load *op) {
         const Load *e = expr.as<Load>();
-        if (result && e && e->type == op->type && e->name == op->name) {
+        if (result && e && types_match(op->type, e->type) && e->name == op->name) {
             expr = e->index;
             op->index.accept(this);
         } else {
@@ -167,7 +193,7 @@ public:
 
     void visit(const Broadcast *op) {
         const Broadcast *e = expr.as<Broadcast>();
-        if (result && e && e->width == op->width) {
+        if (result && e && types_match(op->type, e->type)) {
             expr = e->value;
             op->value.accept(this);
         } else {
@@ -178,7 +204,7 @@ public:
     void visit(const Call *op) {
         const Call *e = expr.as<Call>();
         if (result && e &&
-            e->type == op->type &&
+            types_match(op->type, e->type) &&
             e->name == op->name &&
             e->value_index == op->value_index &&
             e->call_type == op->call_type &&
@@ -207,8 +233,25 @@ public:
 
 bool expr_match(Expr pattern, Expr expr, vector<Expr> &matches) {
     matches.clear();
-    if (!pattern.defined() && !pattern.defined()) return true;
-    if (!pattern.defined() || !pattern.defined()) return false;
+    if (!pattern.defined() && !expr.defined()) return true;
+    if (!pattern.defined() || !expr.defined()) return false;
+
+    IRMatch eq(expr, matches);
+    pattern.accept(&eq);
+    if (eq.result) {
+        return true;
+    } else {
+        matches.clear();
+        return false;
+    }
+}
+
+bool expr_match(Expr pattern, Expr expr, map<string, Expr> &matches) {
+    // Explicitly don't clear matches. This allows usages to pre-match
+    // some variables.
+
+    if (!pattern.defined() && !expr.defined()) return true;
+    if (!pattern.defined() || !expr.defined()) return false;
 
     IRMatch eq(expr, matches);
     pattern.accept(&eq);

@@ -1,4 +1,4 @@
-#include <Halide.h>
+#include "Halide.h"
 #include <stdio.h>
 
 using namespace Halide;
@@ -9,7 +9,7 @@ using namespace Halide;
 #define DLLEXPORT
 #endif
 
-extern "C" DLLEXPORT 
+extern "C" DLLEXPORT
 int dump_to_file(buffer_t *input, const char *filename,
                  int desired_min, int desired_extent,
                  buffer_t *) {

@@ -21,6 +21,24 @@ using std::vector;
 using std::string;
 using std::pair;
 
+namespace {
+int static_sign(Expr x) {
+    if (is_positive_const(x)) {
+        return 1;
+    } else if (is_negative_const(x)) {
+        return -1;
+    } else {
+        Expr zero = make_zero(x.type());
+        if (equal(const_true(), simplify(x > zero))) {
+            return 1;
+        } else if (equal(const_true(), simplify(x < zero))) {
+            return -1;
+        }
+    }
+    return 0;
+}
+}
+
 class Bounds : public IRVisitor {
 public:
     Expr min, max;
@@ -358,13 +376,8 @@ private:
     }
 
     void visit(const Div *op) {
-
         op->a.accept(this);
         Expr min_a = min, max_a = max;
-        if (!min_a.defined() || !max_a.defined()) {
-            min = Expr(); max = Expr(); return;
-        }
-
         op->b.accept(this);
         Expr min_b = min, max_b = max;
         if (!min_b.defined() || !max_b.defined()) {
@@ -377,18 +390,22 @@ private:
             return;
         }
 
-        if (min_b.same_as(max_b)) {
+        if (equal(min_b, max_b)) {
             if (is_zero(min_b)) {
                 // Divide by zero. Drat.
                 min = Expr();
                 max = Expr();
             } else if (is_positive_const(min_b) || op->type.is_uint()) {
-                min = min_a / min_b;
-                max = max_a / min_b;
+                min = min_a.defined()? min_a / min_b: Expr();
+                max = max_a.defined()? max_a / min_b: Expr();
             } else if (is_negative_const(min_b)) {
-                min = max_a / min_b;
-                max = min_a / min_b;
+                min = max_a.defined()? max_a / min_b: Expr();
+                max = min_a.defined()? min_a / min_b: Expr();
             } else {
+                if (!min_a.defined() || !max_a.defined()) {
+                    min = Expr(); max = Expr(); return;
+                }
+
                 // Sign of b is unknown
                 Expr a = min_a / min_b;
                 Expr b = max_a / max_b;
@@ -397,14 +414,14 @@ private:
                 max = select(cmp, b, a);
             }
         } else {
+            if (!min_a.defined() || !max_a.defined()) {
+                min = Expr(); max = Expr(); return;
+            }
+
             // if we can't statically prove that the divisor can't span zero, then we're unbounded
-            bool min_is_positive = is_positive_const(min_b) ||
-                equal(const_true(), simplify(min_b > make_zero(min_b.type())));
-            bool max_is_negative = is_negative_const(max_b) ||
-                equal(const_true(), simplify(max_b < make_zero(max_b.type())));
-            if (!equal(min_b, max_b) &&
-                !min_is_positive &&
-                !max_is_negative) {
+            int min_sign = static_sign(min_b);
+            int max_sign = static_sign(max_b);
+            if (min_sign != max_sign || min_sign == 0 || max_sign == 0) {
                 min = Expr();
                 max = Expr();
                 return;
@@ -443,7 +460,11 @@ private:
         } else {
             // Only consider B (so A can be undefined)
             min = make_zero(op->type);
-            max = max_b;
+            if (max_b.type().is_uint()) {
+                max = max_b;
+            } else {
+                max = cast(op->type, abs(max_b));
+            }
             if (!max.type().is_float()) {
                 // Integer modulo returns at most one less than the
                 // second arg.
@@ -644,10 +665,17 @@ private:
             Expr min_a = min, max_a = max;
             min = make_zero(op->type);
             if (min_a.defined() && max_a.defined()) {
-                if (op->type.is_uint()) {
-                    max = Max::make(cast(op->type, 0-min_a), cast(op->type, max_a));
+                if (equal(min_a, max_a)) {
+                    min = max = Call::make(op->type, Call::abs, vec(max_a), Call::Intrinsic);
                 } else {
-                    max = Max::make(0-min_a, max_a);
+                    min = make_zero(op->type);
+                    if (op->args[0].type().is_int() && op->args[0].type().bits == 32) {
+                        max = Max::make(Cast::make(op->type, -min_a), Cast::make(op->type, max_a));
+                    } else {
+                        min_a = Call::make(op->type, Call::abs, vec(min_a), Call::Intrinsic);
+                        max_a = Call::make(op->type, Call::abs, vec(max_a), Call::Intrinsic);
+                        max = Max::make(min_a, max_a);
+                    }
                 }
             } else {
                 // If the argument is unbounded on one side, then the max is unbounded.
@@ -661,6 +689,15 @@ private:
             // Probably more conservative than necessary
             Expr equivalent_select = Select::make(op->args[0], op->args[1], op->args[2]);
             equivalent_select.accept(this);
+        } else if (op->call_type == Call::Intrinsic &&
+                   (op->name == Call::shift_left || op->name == Call::shift_right || op->name == Call::bitwise_and)) {
+            Expr simplified = simplify(op);
+            if (!simplified.same_as(op)) {
+                simplified.accept(this);
+            } else {
+                // Just use the bounds of the type
+                bounds_of_type(op->type);
+            }
         } else if (op->args.size() == 1 && min.defined() && max.defined() &&
                    (op->name == "ceil_f32" || op->name == "ceil_f64" ||
                     op->name == "floor_f32" || op->name == "floor_f64" ||
@@ -690,6 +727,13 @@ private:
             // loop to check perfect nesting.
             min = Call::make(Int(32), Call::extract_buffer_min, op->args, Call::Intrinsic);
             max = Call::make(Int(32), Call::extract_buffer_max, op->args, Call::Intrinsic);
+        } else if (op->call_type == Call::Intrinsic && op->name == Call::memoize_expr) {
+            internal_assert(op->args.size() >= 1);
+            op->args[0].accept(this);
+        } else if (op->call_type == Call::Intrinsic && op->name == Call::trace_expr) {
+            // trace_expr returns argument 4
+            internal_assert(op->args.size() >= 5);
+            op->args[4].accept(this);
         } else if (op->func.has_pure_definition()) {
             bounds_of_func(op->func, op->value_index);
         } else {
@@ -853,20 +897,26 @@ void merge_boxes(Box &a, const Box &b) {
 
     internal_assert(a.size() == b.size());
 
+    bool a_maybe_unused = a.maybe_unused();
+    bool b_maybe_unused = b.maybe_unused();
+
+    bool complementary = a_maybe_unused && b_maybe_unused &&
+        (equal(a.used, !b.used) || equal(!a.used, b.used));
+
     for (size_t i = 0; i < a.size(); i++) {
         if (!a[i].min.same_as(b[i].min)) {
             if (a[i].min.defined() && b[i].min.defined()) {
-                if (a.used.defined() && b.used.defined()) {
-                    if (equal(a.used, !b.used) || equal(!a.used, b.used)) {
+                if (a_maybe_unused && b_maybe_unused) {
+                    if (complementary) {
                         a[i].min = select(a.used, a[i].min, b[i].min);
                     } else {
                         a[i].min = select(a.used && b.used, simple_min(a[i].min, b[i].min),
                                           a.used, a[i].min,
                                           b[i].min);
                     }
-                } else if (a.used.defined()) {
+                } else if (a_maybe_unused) {
                     a[i].min = select(a.used, simple_min(a[i].min, b[i].min), b[i].min);
-                } else if (b.used.defined()) {
+                } else if (b_maybe_unused) {
                     a[i].min = select(b.used, simple_min(a[i].min, b[i].min), a[i].min);
                 } else {
                     a[i].min = simple_min(a[i].min, b[i].min);
@@ -877,17 +927,17 @@ void merge_boxes(Box &a, const Box &b) {
         }
         if (!a[i].max.same_as(b[i].max)) {
             if (a[i].max.defined() && b[i].max.defined()) {
-                if (a.used.defined() && b.used.defined()) {
-                    if (equal(a.used, !b.used) || equal(!a.used, b.used)) {
+                if (a_maybe_unused && b_maybe_unused) {
+                    if (complementary) {
                         a[i].max = select(a.used, a[i].max, b[i].max);
                     } else {
                         a[i].max = select(a.used && b.used, simple_max(a[i].max, b[i].max),
                                           a.used, a[i].max,
                                           b[i].max);
                     }
-                } else if (a.used.defined()) {
+                } else if (a_maybe_unused) {
                     a[i].max = select(a.used, simple_max(a[i].max, b[i].max), b[i].max);
-                } else if (b.used.defined()) {
+                } else if (b_maybe_unused) {
                     a[i].max = select(b.used, simple_max(a[i].max, b[i].max), a[i].max);
                 } else {
                     a[i].max = simple_max(a[i].max, b[i].max);
@@ -898,7 +948,7 @@ void merge_boxes(Box &a, const Box &b) {
         }
     }
 
-    if (a.used.defined() && b.used.defined()) {
+    if (a_maybe_unused && b_maybe_unused) {
         if (!equal(a.used, b.used)) {
             a.used = simplify(a.used || b.used);
             if (is_one(a.used)) {
@@ -908,6 +958,34 @@ void merge_boxes(Box &a, const Box &b) {
     } else {
         a.used = Expr();
     }
+}
+
+bool boxes_overlap(const Box &a, const Box &b) {
+    // If one box is scalar and the other is not, the boxes cannot
+    // overlap.
+    if (a.size() != b.size() && (a.size() == 0 || b.size() == 0)) {
+        return false;
+    }
+
+    internal_assert(a.size() == b.size());
+
+    bool a_maybe_unused = a.maybe_unused();
+    bool b_maybe_unused = b.maybe_unused();
+
+    // Overlapping requires both boxes to be used.
+    Expr overlap = ((a_maybe_unused ? a.used : const_true()) &&
+                    (b_maybe_unused ? b.used : const_true()));
+
+    for (size_t i = 0; i < a.size(); i++) {
+        if (a[i].max.defined() && b[i].min.defined()) {
+            overlap = overlap && b[i].max >= a[i].min;
+        }
+        if (a[i].min.defined() && b[i].max.defined()) {
+            overlap = overlap && a[i].max >= b[i].min;
+        }
+    }
+
+    return !is_zero(simplify(overlap));
 }
 
 // Compute the box produced by a statement
@@ -949,10 +1027,18 @@ private:
             // Visit the args of the inner call
             internal_assert(op->args.size() == 1);
             const Call *c = op->args[0].as<Call>();
-            internal_assert(c);
-            for (size_t i = 0; i < c->args.size(); i++) {
-                c->args[i].accept(this);
+
+            if (c) {
+                for (size_t i = 0; i < c->args.size(); i++) {
+                    c->args[i].accept(this);
+                }
+            } else {
+                const Load *l = op->args[0].as<Load>();
+
+                internal_assert(l);
+                l->index.accept(this);
             }
+
             return;
         }
 
@@ -964,6 +1050,7 @@ private:
         }
 
         Box b(op->args.size());
+        b.used = const_true();
         for (size_t i = 0; i < op->args.size(); i++) {
             op->args[i].accept(this);
             b[i] = bounds_of_expr_in_scope(op->args[i], scope, func_bounds);
@@ -1060,7 +1147,7 @@ private:
                 else_boxes.swap(boxes);
             }
 
-            //debug(0) << "Encountered an ifthenelse over a param: " << op->condition << "\n";
+            // debug(0) << "Encountered an ifthenelse over a param: " << op->condition << "\n";
 
             // Make sure all the then boxes have an entry on the else
             // side so that the merge doesn't skip them.
@@ -1076,22 +1163,22 @@ private:
                 Box &then_box = then_boxes[iter->first];
                 Box &orig_box = boxes[iter->first];
 
-                //debug(0) << " Merging boxes for " << iter->first << "\n";
+                // debug(0) << " Merging boxes for " << iter->first << "\n";
 
-                if (then_box.used.defined()) {
+                if (then_box.maybe_unused()) {
                     then_box.used = then_box.used && op->condition;
                 } else {
                     then_box.used = op->condition;
                 }
 
-                if (else_box.used.defined()) {
+                if (else_box.maybe_unused()) {
                     else_box.used = else_box.used && !op->condition;
                 } else {
                     else_box.used = !op->condition;
                 }
 
+                merge_boxes(then_box, else_box);
                 merge_boxes(orig_box, then_box);
-                merge_boxes(orig_box, else_box);
             }
         }
 
@@ -1239,7 +1326,7 @@ FuncValueBounds compute_function_value_bounds(const vector<string> &order,
             Interval result;
 
             if (f.has_pure_definition() &&
-                !f.has_reduction_definition() &&
+                !f.has_update_definition() &&
                 !f.has_extern_definition()) {
 
                 // Make a scope that says the args could be anything.
@@ -1317,7 +1404,7 @@ void bounds_test() {
 
     Buffer in(Int(32), vec(10), NULL, "input");
 
-    Stmt loop = For::make("x", 3, 10, For::Serial,
+    Stmt loop = For::make("x", 3, 10, ForType::Serial, DeviceAPI::Host,
                           Provide::make("output",
                                         vec(Add::make(
                                                 Call::make(in, input_site_1),

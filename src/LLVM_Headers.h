@@ -1,25 +1,17 @@
 #ifndef HALIDE_LLVM_HEADERS_H
 #define HALIDE_LLVM_HEADERS_H
 
+// This seems to be required by some LLVM header, which is likely an LLVM bug.
+#include <stddef.h>
+
 // No msvc warnings from llvm headers please
 #ifdef _WIN32
 #pragma warning(push, 0)
 #endif
 
-// MCJIT doesn't seem to work right on os x or windows yet
-#ifdef __APPLE__
-#else
-#ifdef _WIN32
-#else
-#define USE_MCJIT
-#endif
-#endif
-
-#ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/MCJIT.h>
-#else
-#include <llvm/ExecutionEngine/JIT.h>
-#endif
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
 
 #if LLVM_VERSION < 35
 #include <llvm/Analysis/Verifier.h>
@@ -32,15 +24,26 @@
 
 #include <llvm/Bitcode/ReaderWriter.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#if LLVM_VERSION < 36
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
+#endif
+#if LLVM_VERSION < 37
 #include <llvm/PassManager.h>
+#else
+#include <llvm/IR/LegacyPassManager.h>
+#endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/DataExtractor.h>
+#if LLVM_VERSION > 36
+#include <llvm/Analysis/TargetLibraryInfo.h>
+#else
 #include <llvm/Target/TargetLibraryInfo.h>
+#endif
+#include <llvm/Target/TargetSubtargetInfo.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/ADT/StringMap.h>
@@ -83,5 +86,15 @@
 #include <assert.h>
 #define NDEBUG
 #endif
+
+namespace Halide { namespace Internal {
+#if LLVM_VERSION >= 36
+typedef llvm::Metadata *LLVMMDNodeArgumentType;
+inline llvm::Metadata *value_as_metadata_type(llvm::Value *val) { return llvm::ValueAsMetadata::get(val); }
+#else
+typedef llvm::Value *LLVMMDNodeArgumentType;
+inline llvm::Value *value_as_metadata_type(llvm::Value *val) { return val; }
+#endif
+}}
 
 #endif

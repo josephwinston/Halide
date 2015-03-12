@@ -164,11 +164,18 @@ private:
         // actuall call to the Func happens.
         if (op->call_type == Call::Intrinsic && op->name == Call::address_of) {
             // Visit the args of the inner call
-            internal_assert(op->args.size() == 1);
             const Call *c = op->args[0].as<Call>();
-            internal_assert(c);
-            for (size_t i = 0; i < c->args.size(); i++) {
-                c->args[i].accept(this);
+            if (c) {
+                varies |= varying.contains(c->name);
+                for (size_t i = 0; i < c->args.size(); i++) {
+                    c->args[i].accept(this);
+                }
+            } else {
+                const Load *l = op->args[0].as<Load>();
+
+                internal_assert(l);
+                varies |= varying.contains(l->name);
+                l->index.accept(this);
             }
             return;
         }
@@ -180,6 +187,20 @@ private:
         if (op->name == buffer || extern_call_uses_buffer(op, buffer)) {
             predicate = const_true();
         }
+    }
+
+    void visit(const Allocate *op) {
+        // This code works to ensure expressions depending on an
+        // allocation don't get moved outside the allocation and are
+        // marked as varying if predicate depends on the value of the
+        // allocation.
+        varying.push(op->name, 0);
+        varying.push(op->name + ".buffer", 0);
+        varying.push(op->name + ".host", 0);
+        IRVisitor::visit(op);
+        varying.pop(op->name + ".host");
+        varying.pop(op->name + ".buffer");
+        varying.pop(op->name);
     }
 };
 
@@ -228,14 +249,14 @@ private:
         bool old_in_vector_loop = in_vector_loop;
 
         // We want to be sure that the predicate doesn't vectorize.
-        if (op->for_type == For::Vectorized) {
+        if (op->for_type == ForType::Vectorized) {
             vector_vars.push(op->name, 0);
             in_vector_loop = true;
         }
 
         IRMutator::visit(op);
 
-        if (op->for_type == For::Vectorized) {
+        if (op->for_type == ForType::Vectorized) {
             vector_vars.pop(op->name);
         }
 
@@ -303,20 +324,21 @@ class MightBeSkippable : public IRVisitor {
             // Visit the args of the inner call
             internal_assert(op->args.size() == 1);
             const Call *c = op->args[0].as<Call>();
-            internal_assert(c);
-            for (size_t i = 0; i < c->args.size(); i++) {
-                c->args[i].accept(this);
+            if (c) {
+                for (size_t i = 0; i < c->args.size(); i++) {
+                    c->args[i].accept(this);
+                }
+            } else {
+                const Load *l = op->args[0].as<Load>();
+
+                internal_assert(l);
+                l->index.accept(this);
             }
             return;
         }
         IRVisitor::visit(op);
         if (op->name == func || extern_call_uses_buffer(op, func)) {
-            if (!found_call) {
-                result = guarded;
-                found_call = true;
-            } else {
-                result &= guarded;
-            }
+            result &= guarded;
         }
     }
 
@@ -355,7 +377,10 @@ class MightBeSkippable : public IRVisitor {
 
     void visit(const Pipeline *op) {
         if (op->name == func) {
+            bool old_result = result;
+            result = true;
             op->consume.accept(this);
+            result = result || old_result;
         } else {
             IRVisitor::visit(op);
         }
@@ -366,9 +391,8 @@ class MightBeSkippable : public IRVisitor {
 
 public:
     bool result;
-    bool found_call;
 
-    MightBeSkippable(string f) : func(f), guarded(false), result(false), found_call(false) {}
+    MightBeSkippable(string f) : func(f), guarded(false), result(false) {}
 };
 
 Stmt skip_stages(Stmt stmt, const vector<string> &order) {

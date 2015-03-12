@@ -1,4 +1,4 @@
-#include <Halide.h>
+#include "Halide.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -82,11 +82,42 @@ double divide(double x, double y) {
     return x/y;
 }
 
+template <typename A>
+A absd(A x, A y) {
+    return x > y ? x - y : y - x;
+}
+
 int mantissa(float x) {
     int bits = 0;
     memcpy(&bits, &x, 4);
     return bits & 0x007fffff;
 }
+
+template <typename T>
+struct with_unsigned {
+    typedef T type;
+};
+
+template <>
+struct with_unsigned<int8_t> {
+    typedef uint8_t type;
+};
+
+template <>
+struct with_unsigned<int16_t> {
+    typedef uint16_t type;
+};
+
+template <>
+struct with_unsigned<int32_t> {
+    typedef uint32_t type;
+};
+
+template <>
+struct with_unsigned<int64_t> {
+    typedef uint64_t type;
+};
+
 
 template<typename A>
 bool test(int vec_width) {
@@ -224,7 +255,6 @@ bool test(int vec_width) {
     // Scatter
     if (verbose) printf("Scatter\n");
     Func f6;
-    RDom i(0, H);
     // Set one entry in each column high
     f6(x, y) = 0;
     f6(x, clamp(x*x, 0, H-1)) = 1;
@@ -396,6 +426,30 @@ bool test(int vec_width) {
         }
     }
 
+    // pmaddwd
+    if (type_of<A>() == Int(16)) {
+        if (verbose) printf("pmaddwd\n");
+        Func f15, f16;
+        f15(x, y) = cast<int>(input(x, y)) * input(x, y+2) + cast<int>(input(x, y+1)) * input(x, y+3);
+        f16(x, y) = cast<int>(input(x, y)) * input(x, y+2) - cast<int>(input(x, y+1)) * input(x, y+3);
+        f15.vectorize(x, vec_width);
+        f16.vectorize(x, vec_width);
+        Image<int32_t> im15 = f15.realize(W, H);
+        Image<int32_t> im16 = f16.realize(W, H);
+        for (int y = 0; y < H; y++) {
+            for (int x = 0; x < W; x++) {
+                int correct15 = input(x, y)*input(x, y+2) + input(x, y+1)*input(x, y+3);
+                int correct16 = input(x, y)*input(x, y+2) - input(x, y+1)*input(x, y+3);
+                if (im15(x, y) != correct15) {
+                    printf("im15(%d, %d) = %d instead of %d\n", x, y, im15(x, y), correct15);
+                }
+                if (im16(x, y) != correct16) {
+                    printf("im16(%d, %d) = %d instead of %d\n", x, y, im16(x, y), correct16);
+                }
+            }
+        }
+    }
+
     // Fast exp, log, and pow
     if (type_of<A>() == Float(32)) {
         if (verbose) printf("Fast transcendentals\n");
@@ -414,13 +468,6 @@ bool test(int vec_width) {
         Image<float> im18 = f18.realize(W, H);
         Image<float> im19 = f19.realize(W, H);
         Image<float> im20 = f20.realize(W, H);
-
-        float worst_log_error = 1e20f;
-        float worst_exp_error = 1e20f;
-        float worst_pow_error = 1e20f;
-        float worst_fast_log_error = 1e20f;
-        float worst_fast_exp_error = 1e20f;
-        float worst_fast_pow_error = 1e20f;
 
         int worst_log_mantissa = 0;
         int worst_exp_mantissa = 0;
@@ -542,6 +589,23 @@ bool test(int vec_width) {
             A correct = (A)(lerped);
             if (im21(x, y) != correct) {
                 printf("lerp(%f, %f, %f) = %f instead of %f\n", a, b, w, (double)(im21(x, y)), (double)(correct));
+                return false;
+            }
+        }
+    }
+
+    // Absolute difference
+    if (verbose) printf("Absolute difference\n");
+    Func f22;
+    f22(x, y) = absd(input(x, y), input(x+1, y));
+    f22.vectorize(x, vec_width);
+    Image<typename with_unsigned<A>::type> im22 = f22.realize(W, H);
+
+    for (int y = 0; y < H; y++) {
+        for (int x = 0; x < W; x++) {
+            typename with_unsigned<A>::type correct = absd((double)input(x, y), (double)input(x+1, y));
+            if (im22(x, y) != correct) {
+                printf("im22(%d, %d) = %f instead of %f\n", x, y, (double)(im3(x, y)), (double)(correct));
                 return false;
             }
         }

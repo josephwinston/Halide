@@ -212,14 +212,14 @@ void Function::define(const vector<string> &args, vector<Expr> values) {
     }
 
     for (size_t i = 0; i < args.size(); i++) {
-        Dim d = {args[i], For::Serial, true};
+        Dim d = {args[i], ForType::Serial, DeviceAPI::Parent, true};
         contents.ptr->schedule.dims().push_back(d);
         contents.ptr->schedule.storage_dims().push_back(args[i]);
     }
 
     // Add the dummy outermost dim
     {
-        Dim d = {Var::outermost().name(), For::Serial, true};
+        Dim d = {Var::outermost().name(), ForType::Serial, DeviceAPI::Parent, true};
         contents.ptr->schedule.dims().push_back(d);
     }
 
@@ -228,16 +228,17 @@ void Function::define(const vector<string> &args, vector<Expr> values) {
         if (values.size() > 1) {
             buffer_name += '.' + int_to_string((int)i);
         }
-        contents.ptr->output_buffers.push_back(Parameter(values[i].type(), true, buffer_name));
+        Parameter output(values[i].type(), true, args.size(), buffer_name);
+        contents.ptr->output_buffers.push_back(output);
     }
 }
 
-void Function::define_reduction(const vector<Expr> &_args, vector<Expr> values) {
+void Function::define_update(const vector<Expr> &_args, vector<Expr> values) {
     user_assert(!name().empty())
         << "Func has an empty name.\n";
     user_assert(has_pure_definition())
         << "In update definition of Func \"" << name() << "\":\n"
-        << "Can't add a update definition without a pure definition first.\n";
+        << "Can't add an update definition without a pure definition first.\n";
     user_assert(!frozen())
         << "Func " << name() << " cannot be given a new update definition, "
         << "because it has already been realized or used in the definition of another Func.\n";
@@ -245,7 +246,7 @@ void Function::define_reduction(const vector<Expr> &_args, vector<Expr> values) 
     for (size_t i = 0; i < values.size(); i++) {
         user_assert(values[i].defined())
             << "In update definition of Func \"" << name() << "\":\n"
-            << "Undefined expression in right-hand-side of reduction.\n";
+            << "Undefined expression in right-hand-side of update.\n";
 
     }
 
@@ -260,7 +261,7 @@ void Function::define_reduction(const vector<Expr> &_args, vector<Expr> values) 
         << "match number of tuple elements for pure definition.\n";
 
     for (size_t i = 0; i < values.size(); i++) {
-        // Check that pure value and the reduction value have the same
+        // Check that pure value and the update value have the same
         // type.  Without this check, allocations may be the wrong size
         // relative to what update code expects.
         Type pure_type = contents.ptr->values[i].type();
@@ -293,7 +294,7 @@ void Function::define_reduction(const vector<Expr> &_args, vector<Expr> values) 
         user_assert(args[i].defined())
             << "In update definition of Func \"" << name() << "\":\n"
             << "Argument " << i
-            << " in left-hand-side of reduction definition is undefined.\n";
+            << " in left-hand-side of update definition is undefined.\n";
         if (const Variable *var = args[i].as<Variable>()) {
             if (!var->param.defined() &&
                 !var->reduction_domain.defined() &&
@@ -350,13 +351,13 @@ void Function::define_reduction(const vector<Expr> &_args, vector<Expr> values) 
         values[i] = lower_random(values[i], free_vars, tag);
     }
 
-    ReductionDefinition r;
+    UpdateDefinition r;
     r.args = args;
     r.values = values;
     r.domain = check.reduction_domain;
     r.schedule.set_reduction_domain(r.domain);
 
-    // The reduction value and args probably refer back to the
+    // The update value and args probably refer back to the
     // function itself, introducing circular references and hence
     // memory leaks. We need to count the number of unique call nodes
     // that point back to this function in order to break the cycles.
@@ -386,7 +387,7 @@ void Function::define_reduction(const vector<Expr> &_args, vector<Expr> values) 
 
             bool pure = can_parallelize_rvar(v, name(), r);
 
-            Dim d = {v, For::Serial, pure};
+            Dim d = {v, ForType::Serial, DeviceAPI::Parent, pure};
             r.schedule.dims().push_back(d);
         }
     }
@@ -394,14 +395,14 @@ void Function::define_reduction(const vector<Expr> &_args, vector<Expr> values) 
     // Then add the pure args outside of that
     for (size_t i = 0; i < pure_args.size(); i++) {
         if (!pure_args[i].empty()) {
-            Dim d = {pure_args[i], For::Serial, true};
+            Dim d = {pure_args[i], ForType::Serial, DeviceAPI::Parent, true};
             r.schedule.dims().push_back(d);
         }
     }
 
     // Then the dummy outermost dim
     {
-        Dim d = {Var::outermost().name(), For::Serial, true};
+        Dim d = {Var::outermost().name(), ForType::Serial, DeviceAPI::Parent, true};
         r.schedule.dims().push_back(d);
     }
 
@@ -419,7 +420,7 @@ void Function::define_reduction(const vector<Expr> &_args, vector<Expr> values) 
             << " an already-defined function.\n";
     }
 
-    contents.ptr->reductions.push_back(r);
+    contents.ptr->updates.push_back(r);
 
 }
 
@@ -428,8 +429,7 @@ void Function::define_extern(const std::string &function_name,
                              const std::vector<Type> &types,
                              int dimensionality) {
 
-    string source_loc = get_source_location();
-    user_assert(!has_pure_definition() && !has_reduction_definition())
+    user_assert(!has_pure_definition() && !has_update_definition())
         << "In extern definition for Func \"" << name() << "\":\n"
         << "Func with a pure definition cannot have an extern definition.\n";
 
@@ -446,7 +446,8 @@ void Function::define_extern(const std::string &function_name,
         if (types.size() > 1) {
             buffer_name += '.' + int_to_string((int)i);
         }
-        contents.ptr->output_buffers.push_back(Parameter(types[i], true, buffer_name));
+        Parameter output(types[i], true, dimensionality, buffer_name);
+        contents.ptr->output_buffers.push_back(output);
     }
 
     // Make some synthetic var names for scheduling purposes (e.g. reorder_storage).

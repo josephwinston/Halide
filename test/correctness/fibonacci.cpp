@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <Halide.h>
+#include "Halide.h"
 
 using namespace Halide;
 
@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
     Var x;
     RDom r(2, 18);
 
-    fib(x) = 1; 
+    fib(x) = 1;
     fib(r) = fib(r-2) + fib(r-1);
 
     g(x) = fib(x+10);
@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
                 return -1;
             }
         }
-    }    
+    }
 
     printf("Success!\n");
 

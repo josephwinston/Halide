@@ -4,6 +4,11 @@
 // evaluate pixels in a Func, including vectorization,
 // parallelization, unrolling, and tiling.
 
+// This lesson can be built by invoking the command:
+//    make tutorial_lesson_05_scheduling_1
+// in a shell with the current directory at the top of the halide source tree.
+// Otherwise, see the platform-specific compiler invocations below.
+
 // On linux, you can compile and run it like so:
 // g++ lesson_05*.cpp -g -I ../include -L ../bin -lHalide -lpthread -ldl -o lesson_05
 // LD_LIBRARY_PATH=../bin ./lesson_05
@@ -12,7 +17,7 @@
 // g++ lesson_05*.cpp -g -I ../include -L ../bin -lHalide -o lesson_05
 // DYLD_LIBRARY_PATH=../bin ./lesson_05
 
-#include <Halide.h>
+#include "Halide.h"
 #include <stdio.h>
 using namespace Halide;
 
@@ -30,7 +35,10 @@ int main(int argc, char **argv) {
         gradient(x, y) = x + y;
         gradient.trace_stores();
 
-        // By default we walk along the rows and then down the columns.
+        // By default we walk along the rows and then down the
+        // columns. This means x varies quickly, and y varies
+        // slowly. x is the column and y is the row, so this is a
+        // row-major traversal.
         printf("Evaluating gradient row-major\n");
         Image<int> output = gradient.realize(4, 4);
 
@@ -38,7 +46,7 @@ int main(int argc, char **argv) {
         printf("Equivalent C:\n");
         for (int y = 0; y < 4; y++) {
             for (int x = 0; x < 4; x++) {
-                printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+                printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
             }
         }
         printf("\n\n");
@@ -57,13 +65,17 @@ int main(int argc, char **argv) {
         // loop out, so the following call puts y in the inner loop:
         gradient.reorder(y, x);
 
+        // This means y (the row) will vary quickly, and x (the
+        // column) will vary slowly, so this is a column-major
+        // traversal.
+
         printf("Evaluating gradient column-major\n");
         Image<int> output = gradient.realize(4, 4);
 
         printf("Equivalent C:\n");
         for (int x = 0; x < 4; x++) {
             for (int y = 0; y < 4; y++) {
-                printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+                printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
             }
         }
         printf("\n\n");
@@ -98,7 +110,7 @@ int main(int argc, char **argv) {
             for (int x_outer = 0; x_outer < 2; x_outer++) {
                 for (int x_inner = 0; x_inner < 2; x_inner++) {
                     int x = x_outer * 2 + x_inner;
-                    printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+                    printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
                 }
             }
         }
@@ -117,7 +129,7 @@ int main(int argc, char **argv) {
 
         // The opposite of splitting is 'fusing'. Fusing two variables
         // merges the two loops into a single for loop over the
-        // product of the extents. Fusing is less important that
+        // product of the extents. Fusing is less important than
         // splitting, but it also sees use (as we'll see later in this
         // lesson). Like splitting, fusing by itself doesn't change
         // the order of evaluation.
@@ -131,7 +143,7 @@ int main(int argc, char **argv) {
         for (int fused = 0; fused < 4*4; fused++) {
             int y = fused / 4;
             int x = fused % 4;
-            printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+            printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
         }
     }
 
@@ -169,7 +181,7 @@ int main(int argc, char **argv) {
                     for (int x_inner = 0; x_inner < 2; x_inner++) {
                         int x = x_outer * 2 + x_inner;
                         int y = y_outer * 2 + y_inner;
-                        printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+                        printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
                     }
                 }
             }
@@ -208,9 +220,6 @@ int main(int argc, char **argv) {
         // Note that in this case we reused the name 'x' as the new
         // outer variable. Later scheduling calls that refer to x
         // will refer to this new outer variable named x.
-        //
-        // Our snoop function isn't set-up to print out vectors, this
-        // is why we included one called snoopx4 above.
 
         // This time we'll evaluate over an 8x4 box, so that we have
         // more than one vector of work per scanline.
@@ -271,12 +280,12 @@ int main(int argc, char **argv) {
                 {
                     int x_inner = 0;
                     int x = x_outer * 2 + x_inner;
-                    printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+                    printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
                 }
                 {
                     int x_inner = 1;
                     int x = x_outer * 2 + x_inner;
-                    printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+                    printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
                 }
             }
         }
@@ -314,7 +323,7 @@ int main(int argc, char **argv) {
                     // factor).
                     if (x > 3) x = 3;
                     x += x_inner;
-                    printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+                    printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
                 }
             }
         }
@@ -336,6 +345,12 @@ int main(int argc, char **argv) {
         // x = min(x_outer * factor, x_extent - factor) + x_inner + x_min
         //
         // In our example, x_min was 0, x_extent was 5, and factor was 2.
+
+        // However, if you write a Halide function with an update
+        // definition (see lesson 9), then it is not safe to evaluate
+        // the same point multiple times, so we won't apply this
+        // trick. Instead the range of values computed will be rounded
+        // up to the next multiple of the split factor.
     }
 
     // Fusing, tiling, and parallelizing.
@@ -388,7 +403,7 @@ int main(int argc, char **argv) {
                 for (int x_inner = 0; x_inner < 2; x_inner++) {
                     int y = y_outer * 2 + y_inner;
                     int x = x_outer * 2 + x_inner;
-                    printf("Evaluating at %d, %d: %d\n", x, y, x + y);
+                    printf("Evaluating at x = %d, y = %d: %d\n", x, y, x + y);
                 }
             }
         }

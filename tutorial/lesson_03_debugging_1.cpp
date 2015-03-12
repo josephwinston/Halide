@@ -2,6 +2,11 @@
 
 // This lesson demonstrates how to inspect what the Halide compiler is producing.
 
+// This lesson can be built by invoking the command:
+//    make tutorial_lesson_03_debugging_1
+// in a shell with the current directory at the top of the halide source tree.
+// Otherwise, see the platform-specific compiler invocations below.
+
 // On linux, you can compile and run it like so:
 // g++ lesson_03*.cpp -g -I ../include -L ../bin -lHalide -lpthread -ldl -o lesson_03
 // LD_LIBRARY_PATH=../bin ./lesson_03
@@ -10,7 +15,7 @@
 // g++ lesson_03*.cpp -g -I ../include -L ../bin -lHalide -o lesson_03
 // DYLD_LIBRARY_PATH=../bin ./lesson_03
 
-#include <Halide.h>
+#include "Halide.h"
 #include <stdio.h>
 
 // This time we'll just import the entire Halide namespace

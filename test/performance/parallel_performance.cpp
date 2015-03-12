@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <Halide.h>
+#include "Halide.h"
 #include "clock.h"
 
 using namespace Halide;
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "WARNING: Parallel should be faster\n");
         return 0;
     }
-    
+
     printf("Success!\n");
     return 0;
 }

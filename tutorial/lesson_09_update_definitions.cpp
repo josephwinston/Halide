@@ -2,6 +2,11 @@
 
 // This lesson demonstrates how to define a Func in multiple passes, including scattering.
 
+// This lesson can be built by invoking the command:
+//    make tutorial_lesson_09_update_definitions
+// in a shell with the current directory at the top of the halide source tree.
+// Otherwise, see the platform-specific compiler invocations below.
+
 // On linux, you can compile and run it like so:
 // g++ lesson_09*.cpp -g -I ../include -L ../bin -lHalide `libpng-config --cflags --ldflags` -lpthread -ldl -fopenmp -o lesson_09
 // LD_LIBRARY_PATH=../bin ./lesson_09
@@ -10,7 +15,7 @@
 // g++ lesson_09*.cpp -g -I ../include -L ../bin -lHalide `libpng-config --cflags --ldflags` -fopenmp -o lesson_09
 // DYLD_LIBRARY_PATH=../bin ./lesson_09
 
-#include <Halide.h>
+#include "Halide.h"
 #include <stdio.h>
 
 // We're going to be using x86 SSE intrinsics later on in this lesson.
@@ -213,11 +218,11 @@ int main(int argc, char **argv) {
     // Scheduling update steps
     {
         // The pure variables in an update step and can be
-        // parallelized, vectorized, split, etc as usual. The
-        // variables that are part of the reduction domain (e.g. r.x
-        // in our histogram example) can't be modified, as this risks
-        // changing the meaning of the update step (because the
-        // function may recursively refer back to itself).
+        // parallelized, vectorized, split, etc as usual.
+
+        // Vectorizing, splitting, or parallelize the variables that
+        // are part of the reduction domain is trickier. We'll cover
+        // that in a later lesson.
 
         // Consider the definition:
         Func f;
@@ -240,7 +245,7 @@ int main(int argc, char **argv) {
         // use y.
         f.update(0).vectorize(x, 4);
 
-        // No we parallelize the second update step in chunks of size
+        // Now we parallelize the second update step in chunks of size
         // 4.
         Var yo, yi;
         f.update(1).split(y, yo, yi, 4).parallel(yo);
@@ -772,7 +777,9 @@ int main(int argc, char **argv) {
         // Don't include the time required to allocate the output buffer.
         Image<uint8_t> c_result(input.width(), input.height());
 
+        #ifdef _OPENMP
         double t1 = current_time();
+        #endif
 
         // Run this one hundred times so we can average the timing results.
         for (int iters = 0; iters < 100; iters++) {
@@ -862,11 +869,10 @@ int main(int argc, char **argv) {
             }
         }
 
-        double t2 = current_time();
-
         // Skip the timing comparison if we don't have openmp
         // enabled. Otherwise it's unfair to C.
         #ifdef _OPENMP
+        double t2 = current_time();
 
         // Now run the Halide version again without the
         // jit-compilation overhead. Also run it one hundred times.

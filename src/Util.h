@@ -42,7 +42,7 @@
 namespace Halide {
 namespace Internal {
 
-/** Build small vectors of up to 6 elements. If we used C++11 and
+/** Build small vectors of up to 10 elements. If we used C++11 and
  * had vector initializers, this would not be necessary, but we
  * don't want to rely on C++11 support. */
 //@{
@@ -129,6 +129,37 @@ std::vector<T> vec(T a, T b, T c, T d, T e, T f, T g, T h) {
     v[7] = h;
     return v;
 }
+
+template<typename T>
+std::vector<T> vec(T a, T b, T c, T d, T e, T f, T g, T h, T i) {
+    std::vector<T> v(9);
+    v[0] = a;
+    v[1] = b;
+    v[2] = c;
+    v[3] = d;
+    v[4] = e;
+    v[5] = f;
+    v[6] = g;
+    v[7] = h;
+    v[8] = i;
+    return v;
+}
+
+template<typename T>
+std::vector<T> vec(T a, T b, T c, T d, T e, T f, T g, T h, T i, T j) {
+    std::vector<T> v(10);
+    v[0] = a;
+    v[1] = b;
+    v[2] = c;
+    v[3] = d;
+    v[4] = e;
+    v[5] = f;
+    v[6] = g;
+    v[7] = h;
+    v[8] = i;
+    v[9] = j;
+    return v;
+}
 // @}
 
 /** Convert an integer to a string. */
@@ -163,8 +194,14 @@ EXPORT bool starts_with(const std::string &str, const std::string &prefix);
 /** Test if the first string ends with the second string */
 EXPORT bool ends_with(const std::string &str, const std::string &suffix);
 
+/** Replace all matches of the second string in the first string with the last string */
+EXPORT std::string replace_all(std::string &str, const std::string &find, const std::string &replace);
+    
 /** Return the final token of the name string using the given delimiter. */
 EXPORT std::string base_name(const std::string &name, char delim = '.');
+
+/** Split the source string using 'delim' as the divider. */
+EXPORT std::vector<std::string> split_string(const std::string &source, const std::string &delim);
 
 }
 }

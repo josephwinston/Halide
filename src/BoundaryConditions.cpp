@@ -74,7 +74,7 @@ Func repeat_image(const Func &source,
         // Andrew: does this logic still work well with bounds inference,
         // particularly after the min offseting.
         Expr min = bounds[i].first;
-        Expr extent = bounds[i].second; 
+        Expr extent = bounds[i].second;
         Expr coord = arg_var - min;  // Enforce zero origin.
         coord = coord % extent;      // Range is 0 to w-1
         coord = coord + min;         // Restore correct min
@@ -109,7 +109,6 @@ Func mirror_image(const Func &source,
         Expr min = bounds[i].first;
         Expr extent = bounds[i].second;
         Expr coord = arg_var - min;    // Enforce zero origin.
-        coord = (coord >> 31) ^ coord; // abs but map -1 to 0, not 1
         coord = coord % (2 * extent);  // Range is 0 to 2w-1
         coord = clamp(select(coord >= extent, 2 * extent - 1 - coord, coord), 0, extent - 1);  // Range is -w+1, w
         coord = cast<int32_t>(coord + min); // Restore correct min

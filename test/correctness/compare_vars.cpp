@@ -1,4 +1,4 @@
-#include <Halide.h>
+#include "Halide.h"
 #include <stdio.h>
 
 using namespace Halide;
@@ -7,7 +7,7 @@ int main(int argc, char **argv) {
     Func f;
     Var x, y;
     f(x, y) = select(x == y, 1, 0);
-    
+
     Image<int> im = f.realize(10, 10);
 
     for (int y = 0; y < 10; y++) {

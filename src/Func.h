@@ -12,20 +12,12 @@
 #include "Param.h"
 #include "Argument.h"
 #include "RDom.h"
-#include "JITCompiledModule.h"
+#include "JITModule.h"
 #include "Image.h"
 #include "Target.h"
 #include "Tuple.h"
-#include "Target.h"
 
 namespace Halide {
-
-/** A fragment of front-end syntax of the form f(x, y, z), where x,
- * y, z are Vars. It could be the left-hand side of a function
- * definition, or it could be a call to a function. We don't know
- * until we see how this object gets used.
- */
-class FuncRefExpr;
 
 /** A class that can represent Vars or RVars. Used for reorder calls
  * which can accept a mix of either. */
@@ -45,6 +37,148 @@ struct VarOrRVar {
     const bool is_rvar;
 };
 
+/** A single definition of a Func. May be a pure or update definition. */
+class Stage {
+    Internal::Schedule schedule;
+    void set_dim_type(VarOrRVar var, Internal::ForType t);
+    void set_dim_device_api(VarOrRVar var, DeviceAPI device_api);
+    void split(const std::string &old, const std::string &outer, const std::string &inner, Expr factor, bool exact);
+    std::string stage_name;
+public:
+    Stage(Internal::Schedule s, const std::string &n) :
+        schedule(s), stage_name(n) {s.touched();}
+
+    /** Return a string describing the current var list taking into
+     * account all the splits, reorders, and tiles. */
+    EXPORT std::string dump_argument_list() const;
+
+    /** Return the name of this stage, e.g. "f.update(2)" */
+    EXPORT const std::string &name() const;
+
+    /** Scheduling calls that control how the domain of this stage is
+     * traversed. See the documentation for Func for the meanings. */
+    // @{
+
+    EXPORT Stage &split(VarOrRVar old, VarOrRVar outer, VarOrRVar inner, Expr factor);
+    EXPORT Stage &fuse(VarOrRVar inner, VarOrRVar outer, VarOrRVar fused);
+    EXPORT Stage &serial(VarOrRVar var);
+    EXPORT Stage &parallel(VarOrRVar var);
+    EXPORT Stage &vectorize(VarOrRVar var);
+    EXPORT Stage &unroll(VarOrRVar var);
+    EXPORT Stage &parallel(VarOrRVar var, Expr task_size);
+    EXPORT Stage &vectorize(VarOrRVar var, int factor);
+    EXPORT Stage &unroll(VarOrRVar var, int factor);
+    EXPORT Stage &tile(VarOrRVar x, VarOrRVar y,
+                                VarOrRVar xo, VarOrRVar yo,
+                                VarOrRVar xi, VarOrRVar yi, Expr
+                                xfactor, Expr yfactor);
+    EXPORT Stage &tile(VarOrRVar x, VarOrRVar y,
+                                VarOrRVar xi, VarOrRVar yi,
+                                Expr xfactor, Expr yfactor);
+    EXPORT Stage &reorder(const std::vector<VarOrRVar> &vars);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                   VarOrRVar w);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                   VarOrRVar w, VarOrRVar t);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2,
+                                   VarOrRVar t3);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2,
+                                   VarOrRVar t3, VarOrRVar t4);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2,
+                                   VarOrRVar t3, VarOrRVar t4, VarOrRVar t5);
+    EXPORT Stage &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2,
+                                   VarOrRVar t3, VarOrRVar t4, VarOrRVar t5,
+                                   VarOrRVar t6);
+    EXPORT Stage &rename(VarOrRVar old_name, VarOrRVar new_name);
+    EXPORT Stage specialize(Expr condition);
+
+    EXPORT Stage &gpu_threads(VarOrRVar thread_x, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu_threads(VarOrRVar thread_x, VarOrRVar thread_y, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu_threads(VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu_single_thread(DeviceAPI device_api = DeviceAPI::Default_GPU);
+
+    EXPORT Stage &gpu_blocks(VarOrRVar block_x, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu_blocks(VarOrRVar block_x, VarOrRVar block_y, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu_blocks(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z, DeviceAPI device_api = DeviceAPI::Default_GPU);
+
+    EXPORT Stage &gpu(VarOrRVar block_x, VarOrRVar thread_x, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu(VarOrRVar block_x, VarOrRVar block_y,
+                               VarOrRVar thread_x, VarOrRVar thread_y,
+                               DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z,
+                               VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z,
+                               DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu_tile(VarOrRVar x, Expr x_size, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu_tile(VarOrRVar x, VarOrRVar y, Expr x_size, Expr y_size,
+                                    DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Stage &gpu_tile(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                    Expr x_size, Expr y_size, Expr z_size, DeviceAPI device_api = DeviceAPI::Default_GPU);
+
+    EXPORT Stage &allow_race_conditions();
+    // @}
+
+    // These calls are for legacy compatibility only.
+    EXPORT Stage &cuda_threads(VarOrRVar thread_x) {
+        return gpu_threads(thread_x);
+    }
+    EXPORT Stage &cuda_threads(VarOrRVar thread_x, VarOrRVar thread_y) {
+        return gpu_threads(thread_x, thread_y);
+    }
+    EXPORT Stage &cuda_threads(VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z) {
+        return gpu_threads(thread_x, thread_y, thread_z);
+    }
+
+    EXPORT Stage &cuda_blocks(VarOrRVar block_x) {
+        return gpu_blocks(block_x);
+    }
+    EXPORT Stage &cuda_blocks(VarOrRVar block_x, VarOrRVar block_y) {
+        return gpu_blocks(block_x, block_y);
+    }
+    EXPORT Stage &cuda_blocks(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z) {
+        return gpu_blocks(block_x, block_y, block_z);
+    }
+
+    EXPORT Stage &cuda(VarOrRVar block_x, VarOrRVar thread_x) {
+        return gpu(block_x, thread_x);
+    }
+    EXPORT Stage &cuda(VarOrRVar block_x, VarOrRVar block_y,
+                                VarOrRVar thread_x, VarOrRVar thread_y) {
+        return gpu(block_x, thread_x, block_y, thread_y);
+    }
+    EXPORT Stage &cuda(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z,
+                                VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z) {
+        return gpu(block_x, thread_x, block_y, thread_y, block_z, thread_z);
+    }
+    EXPORT Stage &cuda_tile(VarOrRVar x, int x_size) {
+        return gpu_tile(x, x_size);
+    }
+    EXPORT Stage &cuda_tile(VarOrRVar x, VarOrRVar y, int x_size, int y_size) {
+        return gpu_tile(x, y, x_size, y_size);
+    }
+    EXPORT Stage &cuda_tile(VarOrRVar x, VarOrRVar y, VarOrRVar z,
+                                     int x_size, int y_size, int z_size) {
+        return gpu_tile(x, y, z, x_size, y_size, z_size);
+    }
+};
+
+// For backwards compatibility, keep the ScheduleHandle name.
+typedef Stage ScheduleHandle;
+
+/** A fragment of front-end syntax of the form f(x, y, z), where x,
+ * y, z are Vars. It could be the left-hand side of a function
+ * definition, or it could be a call to a function. We don't know
+ * until we see how this object gets used.
+ */
+class FuncRefExpr;
+
 class FuncRefVar {
     Internal::Function func;
     int implicit_placeholder_pos;
@@ -54,46 +188,46 @@ public:
     FuncRefVar(Internal::Function, const std::vector<Var> &, int placeholder_pos = -1);
 
     /**  Use this as the left-hand-side of a definition. */
-    EXPORT void operator=(Expr);
+    EXPORT Stage operator=(Expr);
 
     /** Use this as the left-hand-side of a definition for a Func with
      * multiple outputs. */
-    EXPORT void operator=(const Tuple &);
-
-    /** Define this function as a sum reduction over the negative of
-     * the given expression. The expression should refer to some RDom
-     * to sum over. If the function does not already have a pure
-     * definition, this sets it to zero.
-     */
-    EXPORT void operator+=(Expr);
+    EXPORT Stage operator=(const Tuple &);
 
     /** Define this function as a sum reduction over the given
      * expression. The expression should refer to some RDom to sum
      * over. If the function does not already have a pure definition,
      * this sets it to zero.
      */
-    EXPORT void operator-=(Expr);
+    EXPORT Stage operator+=(Expr);
+
+    /** Define this function as a sum reduction over the negative of
+     * the given expression. The expression should refer to some RDom
+     * to sum over. If the function does not already have a pure
+     * definition, this sets it to zero.
+     */
+    EXPORT Stage operator-=(Expr);
 
     /** Define this function as a product reduction. The expression
      * should refer to some RDom to take the product over. If the
      * function does not already have a pure definition, this sets it
      * to 1.
      */
-    EXPORT void operator*=(Expr);
+    EXPORT Stage operator*=(Expr);
 
     /** Define this function as the product reduction over the inverse
      * of the expression. The expression should refer to some RDom to
      * take the product over. If the function does not already have a
      * pure definition, this sets it to 1.
      */
-    EXPORT void operator/=(Expr);
+    EXPORT Stage operator/=(Expr);
 
     /** Override the usual assignment operator, so that
      * f(x, y) = g(x, y) defines f.
      */
     // @{
-    EXPORT void operator=(const FuncRefVar &e);
-    EXPORT void operator=(const FuncRefExpr &e);
+    EXPORT Stage operator=(const FuncRefVar &e);
+    EXPORT Stage operator=(const FuncRefExpr &e);
     // @}
 
     /** Use this FuncRefVar as a call to the function, and not as the
@@ -115,7 +249,7 @@ public:
 };
 
 /** A fragment of front-end syntax of the form f(x, y, z), where x, y,
- * z are Exprs. If could be the left hand side of a reduction
+ * z are Exprs. If could be the left hand side of an update
  * definition, or it could be a call to a function. We don't know
  * until we see how this object gets used.
  */
@@ -130,49 +264,49 @@ public:
     FuncRefExpr(Internal::Function, const std::vector<std::string> &,
                 int placeholder_pos = -1);
 
-    /** Use this as the left-hand-side of a reduction definition (see
+    /** Use this as the left-hand-side of an update definition (see
      * \ref RDom). The function must already have a pure definition.
      */
-    EXPORT void operator=(Expr);
+    EXPORT Stage operator=(Expr);
 
-    /** Use this as the left-hand-side of a reduction definition for a
+    /** Use this as the left-hand-side of an update definition for a
      * Func with multiple outputs. */
-    EXPORT void operator=(const Tuple &);
+    EXPORT Stage operator=(const Tuple &);
 
     /** Define this function as a sum reduction over the negative of
      * the given expression. The expression should refer to some RDom
      * to sum over. If the function does not already have a pure
      * definition, this sets it to zero.
      */
-    EXPORT void operator+=(Expr);
+    EXPORT Stage operator+=(Expr);
 
     /** Define this function as a sum reduction over the given
      * expression. The expression should refer to some RDom to sum
      * over. If the function does not already have a pure definition,
      * this sets it to zero.
      */
-    EXPORT void operator-=(Expr);
+    EXPORT Stage operator-=(Expr);
 
     /** Define this function as a product reduction. The expression
      * should refer to some RDom to take the product over. If the
      * function does not already have a pure definition, this sets it
      * to 1.
      */
-    EXPORT void operator*=(Expr);
+    EXPORT Stage operator*=(Expr);
 
     /** Define this function as the product reduction over the inverse
      * of the expression. The expression should refer to some RDom to
      * take the product over. If the function does not already have a
      * pure definition, this sets it to 1.
      */
-    EXPORT void operator/=(Expr);
+    EXPORT Stage operator/=(Expr);
 
     /* Override the usual assignment operator, so that
      * f(x, y) = g(x, y) defines f.
      */
     // @{
-    EXPORT void operator=(const FuncRefVar &);
-    EXPORT void operator=(const FuncRefExpr &);
+    EXPORT Stage operator=(const FuncRefVar &);
+    EXPORT Stage operator=(const FuncRefExpr &);
     // @}
 
     /** Use this as a call to the function, and not the left-hand-side
@@ -192,135 +326,51 @@ public:
     EXPORT Internal::Function function() const {return func;}
 };
 
-enum GPUAPI {
-    GPU_Default,
-    GPU_CUDA,
-    GPU_OpenCL,
-    GPU_GLSL
+/**
+ * Used to determine if the output printed to file should be as a normal string
+ * or as an HTML file which can be opened in a browerser and manipulated via JS and CSS.*/
+enum StmtOutputFormat {
+     Text,
+     HTML
 };
 
-/** A temporary wrapper around a schedule used for common schedule manipulations */
-class ScheduleHandle {
-    Internal::Schedule schedule;
-    void set_dim_type(VarOrRVar var, Internal::For::ForType t);
-    void split(const std::string &old, const std::string &outer, const std::string &inner, Expr factor, bool exact);
-    std::string dump_argument_list();
-public:
-    ScheduleHandle(Internal::Schedule s) : schedule(s) {s.touched();}
+namespace {
+// Helper for deleting custom lowering passes. In the header so that
+// it goes in user code on windows, where you can have multiple heaps.
+template<typename T>
+void delete_lowering_pass(T *pass) {
+    delete pass;
+}
+}
 
-    /** Scheduling calls that control how the domain of this stage is
-     * traversed. See the documentation for Func for the meanings. */
-    // @{
+namespace Internal {
+struct ErrorBuffer;
+class IRMutator;
+}
 
-    EXPORT ScheduleHandle &split(VarOrRVar old, VarOrRVar outer, VarOrRVar inner, Expr factor);
-    EXPORT ScheduleHandle &fuse(VarOrRVar inner, VarOrRVar outer, VarOrRVar fused);
-    EXPORT ScheduleHandle &serial(VarOrRVar var);
-    EXPORT ScheduleHandle &parallel(VarOrRVar var);
-    EXPORT ScheduleHandle &vectorize(VarOrRVar var);
-    EXPORT ScheduleHandle &unroll(VarOrRVar var);
-    EXPORT ScheduleHandle &parallel(VarOrRVar var, Expr task_size);
-    EXPORT ScheduleHandle &vectorize(VarOrRVar var, int factor);
-    EXPORT ScheduleHandle &unroll(VarOrRVar var, int factor);
-    EXPORT ScheduleHandle &tile(VarOrRVar x, VarOrRVar y,
-                                VarOrRVar xo, VarOrRVar yo,
-                                VarOrRVar xi, VarOrRVar yi, Expr
-                                xfactor, Expr yfactor);
-    EXPORT ScheduleHandle &tile(VarOrRVar x, VarOrRVar y,
-                                VarOrRVar xi, VarOrRVar yi,
-                                Expr xfactor, Expr yfactor);
-    EXPORT ScheduleHandle &reorder(const std::vector<VarOrRVar> &vars);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                   VarOrRVar w);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                   VarOrRVar w, VarOrRVar t);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2,
-                                   VarOrRVar t3);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2,
-                                   VarOrRVar t3, VarOrRVar t4);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2,
-                                   VarOrRVar t3, VarOrRVar t4, VarOrRVar t5);
-    EXPORT ScheduleHandle &reorder(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                   VarOrRVar w, VarOrRVar t1, VarOrRVar t2,
-                                   VarOrRVar t3, VarOrRVar t4, VarOrRVar t5,
-                                   VarOrRVar t6);
-    EXPORT ScheduleHandle &rename(VarOrRVar old_name, VarOrRVar new_name);
-    EXPORT ScheduleHandle specialize(Expr condition);
 
-    EXPORT ScheduleHandle &gpu_threads(VarOrRVar thread_x, GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu_threads(VarOrRVar thread_x, VarOrRVar thread_y, GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu_threads(VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z, GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu_single_thread(GPUAPI gpu_api = GPU_Default);
+struct Outputs {
+    std::string object_name;
+    std::string assembly_name;
+    std::string bitcode_name;
 
-    EXPORT ScheduleHandle &gpu_blocks(VarOrRVar block_x, GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu_blocks(VarOrRVar block_x, VarOrRVar block_y, GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu_blocks(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z, GPUAPI gpu_api = GPU_Default);
-
-    EXPORT ScheduleHandle &gpu(VarOrRVar block_x, VarOrRVar thread_x, GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu(VarOrRVar block_x, VarOrRVar block_y,
-                               VarOrRVar thread_x, VarOrRVar thread_y,
-			       GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z,
-                               VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z,
-			       GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu_tile(VarOrRVar x, Expr x_size, GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu_tile(VarOrRVar x, VarOrRVar y, Expr x_size, Expr y_size,
-				    GPUAPI gpu_api = GPU_Default);
-    EXPORT ScheduleHandle &gpu_tile(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                    Expr x_size, Expr y_size, Expr z_size, GPUAPI gpu_api = GPU_Default);
-
-    EXPORT ScheduleHandle &allow_race_conditions();
-    // @}
-
-    // These calls are for legacy compatibility only.
-    EXPORT ScheduleHandle &cuda_threads(VarOrRVar thread_x) {
-        return gpu_threads(thread_x);
+    Outputs object(const std::string &object_name) {
+        Outputs updated = *this;
+        updated.object_name = object_name;
+        return updated;
     }
-    EXPORT ScheduleHandle &cuda_threads(VarOrRVar thread_x, VarOrRVar thread_y) {
-        return gpu_threads(thread_x, thread_y);
+    Outputs assembly(const std::string &assembly_name) {
+        Outputs updated = *this;
+        updated.assembly_name = assembly_name;
+        return updated;
     }
-    EXPORT ScheduleHandle &cuda_threads(VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z) {
-        return gpu_threads(thread_x, thread_y, thread_z);
-    }
-
-    EXPORT ScheduleHandle &cuda_blocks(VarOrRVar block_x) {
-        return gpu_blocks(block_x);
-    }
-    EXPORT ScheduleHandle &cuda_blocks(VarOrRVar block_x, VarOrRVar block_y) {
-        return gpu_blocks(block_x, block_y);
-    }
-    EXPORT ScheduleHandle &cuda_blocks(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z) {
-        return gpu_blocks(block_x, block_y, block_z);
-    }
-
-    EXPORT ScheduleHandle &cuda(VarOrRVar block_x, VarOrRVar thread_x) {
-        return gpu(block_x, thread_x);
-    }
-    EXPORT ScheduleHandle &cuda(VarOrRVar block_x, VarOrRVar block_y,
-                                VarOrRVar thread_x, VarOrRVar thread_y) {
-        return gpu(block_x, thread_x, block_y, thread_y);
-    }
-    EXPORT ScheduleHandle &cuda(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z,
-                                VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z) {
-        return gpu(block_x, thread_x, block_y, thread_y, block_z, thread_z);
-    }
-    EXPORT ScheduleHandle &cuda_tile(VarOrRVar x, int x_size) {
-        return gpu_tile(x, x_size);
-    }
-    EXPORT ScheduleHandle &cuda_tile(VarOrRVar x, VarOrRVar y, int x_size, int y_size) {
-        return gpu_tile(x, y, x_size, y_size);
-    }
-    EXPORT ScheduleHandle &cuda_tile(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                                     int x_size, int y_size, int z_size) {
-        return gpu_tile(x, y, z, x_size, y_size, z_size);
+    Outputs bitcode(const std::string &bitcode_name) {
+        Outputs updated = *this;
+        updated.bitcode_name = bitcode_name;
+        return updated;
     }
 };
+
 
 /** A halide function. This class represents one stage in a Halide
  * pipeline, and is the unit by which we schedule things. By default
@@ -341,51 +391,25 @@ class Func {
     int add_implicit_vars(std::vector<Expr> &) const;
     // @}
 
-    /** The lowered imperative form of this function. Cached here so
-     * that recompilation for different targets doesn't require
-     * re-lowering */
+    /** The lowered imperative form of this function and the target
+     * this was lowered for. Cached here so that recompilation doesn't
+     * necessarily require re-lowering */
+    // @{
     Internal::Stmt lowered;
+    Target lowered_target;
+    // @}
 
     /** Lower the func if it hasn't been already. */
     void lower(const Target &t);
 
     /** A JIT-compiled version of this function that we save so that
      * we don't have to rejit every time we want to evaluated it. */
-    Internal::JITCompiledModule compiled_module;
+    Internal::JITModule compiled_module;
 
     /** Invalidate the cached lowered stmt and compiled module. */
     void invalidate_cache();
 
-    /** The current error handler used for realizing this
-     * function. May be NULL. Only relevant when jitting. */
-    void (*error_handler)(void *user_context, const char *);
-
-    /** The current custom allocator used for realizing this
-     * function. May be NULL. Only relevant when jitting. */
-    // @{
-    void *(*custom_malloc)(void *user_context, size_t);
-    void (*custom_free)(void *user_context, void *ptr);
-    // @}
-
-    /** The current custom parallel task launcher and handler for
-     * realizing this function. May be NULL. */
-    // @{
-    int (*custom_do_par_for)(void *user_context,
-                             int (*)(void *, int, uint8_t *),
-                             int, int, uint8_t *);
-    int (*custom_do_task)(void *user_context, int (*)(void *, int, uint8_t *),
-                          int, uint8_t *);
-    // @}
-
-    /** The current custom tracing function. May be NULL. */
-    // @{
-    int32_t (*custom_trace)(void *, const halide_trace_event *);
-
-    // @}
-
-    /** The current print function used for realizing this
-     * function. May be NULL. Only relevant when jitting. */
-    void (*custom_print)(void *user_context, const char *);
+    Halide::Internal::JITHandlers jit_handlers;
 
     /** The random seed to use for realizations of this function. */
     uint32_t random_seed;
@@ -403,11 +427,19 @@ class Func {
      * still be valid though. */
     std::vector<std::pair<int, Internal::Parameter> > image_param_args;
 
-    /** A context to use for JIT-realizations of this Func. */
-    Param<void *> user_context;
+    /** The user context that's used when jitting. This is not settable
+     * by user code, but is reserved for internal use.
+     * Note that this is an Internal::Parameter (rather than a Param<void*>)
+     * so that we can exclude it from the ObjectInstanceRegistry. */
+    Internal::Parameter jit_user_context;
 
-    // Some infrastructure that helps Funcs catch and handle runtime errors in JIT-compiled code.
-    bool prepare_to_catch_runtime_errors(void *buf);
+    struct CustomLoweringPass {
+        Internal::IRMutator *pass;
+        void (*deleter)(Internal::IRMutator *);
+    };
+
+    /** A set of custom passes to use when lowering this Func. */
+    std::vector<CustomLoweringPass> custom_lowering_passes;
 
 public:
 
@@ -419,6 +451,9 @@ public:
     /** Declare a new undefined function with an
      * automatically-generated unique name */
     EXPORT Func();
+
+    /** Destructor */
+    EXPORT ~Func();
 
     /** Declare a new function with an automatically-generated unique
      * name, and define it to return the given expression (which may
@@ -531,7 +566,8 @@ public:
      * function. You don't actually have to have defined this function
      * yet to call this. You probably don't want to use this directly;
      * call compile_to_file instead. */
-    EXPORT void compile_to_header(const std::string &filename, std::vector<Argument>, const std::string &fn_name = "");
+    EXPORT void compile_to_header(const std::string &filename, std::vector<Argument>, const std::string &fn_name = "",
+                                  const Target &target = get_target_from_environment());
 
     /** Statically compile this function to text assembly equivalent
      * to the object file generated by compile_to_object. This is
@@ -554,10 +590,83 @@ public:
                              const Target &target = get_target_from_environment());
 
     /** Write out an internal representation of lowered code. Useful
-     * for analyzing and debugging scheduling. Canonical extension is
-     * .stmt, which must be supplied in filename. */
+     * for analyzing and debugging scheduling. Can emit html or plain
+     * text. */
     EXPORT void compile_to_lowered_stmt(const std::string &filename,
+                                        StmtOutputFormat fmt = Text,
                                         const Target &target = get_target_from_environment());
+
+    /** Write out an internal representation of lowered code as above
+     * but simplified using the provided realization bounds and other
+     * concrete parameter values. Can emit html or plain text. */
+    //@{
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   Realization dst,
+                                                   const std::map<std::string, Expr> &additional_replacements,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   Realization dst,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   Buffer dst,
+                                                   const std::map<std::string, Expr> &additional_replacements,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &target = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   Buffer dst,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &target = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   int x_size, int y_size, int z_size, int w_size,
+                                                   const std::map<std::string, Expr> &additional_replacements,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   int x_size, int y_size, int z_size, int w_size,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   int x_size, int y_size, int z_size,
+                                                   const std::map<std::string, Expr> &additional_replacements,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   int x_size, int y_size, int z_size,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   int x_size, int y_size,
+                                                   const std::map<std::string, Expr> &additional_replacements,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   int x_size, int y_size,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   int x_size,
+                                                   const std::map<std::string, Expr> &additional_replacements,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    EXPORT void compile_to_simplified_lowered_stmt(const std::string &filename,
+                                                   int x_size,
+                                                   StmtOutputFormat fmt = Text,
+                                                   const Target &t = get_target_from_environment());
+
+    // @}
 
     /** Compile to object file and header pair, with the given
      * arguments. Also names the C function to match the first
@@ -578,6 +687,17 @@ public:
                                 const Target &target = get_target_from_environment());
     EXPORT void compile_to_file(const std::string &filename_prefix, Argument a, Argument b, Argument c, Argument d, Argument e,
                                 const Target &target = get_target_from_environment());
+    // @}
+
+    /** Compile and generate multiple target files with single call.
+     * Deduces target files based on filenames specified in
+     * output_files struct.
+     */
+    //@{
+    EXPORT void compile_to(const Outputs &output_files,
+                           std::vector<Argument> args,
+                           const std::string &fn_name,
+                           const Target &target = get_target_from_environment());
     // @}
 
     /** Eagerly jit compile the function to machine code. This
@@ -674,7 +794,7 @@ public:
      * If you are statically compiling, you can also just define your
      * own versions of the tracing functions (see HalideRuntime.h),
      * and they will clobber Halide's versions. */
-    EXPORT void set_custom_trace(Internal::JITCompiledModule::TraceFn);
+    EXPORT void set_custom_trace(int (*trace_fn)(void *, const halide_trace_event *));
 
     /** Set the function called to print messages from the runtime.
      * If you are compiling statically, you can also just define your
@@ -685,6 +805,32 @@ public:
      * This will clobber Halide's version.
      */
     EXPORT void set_custom_print(void (*handler)(void *, const char *));
+
+    /** Add a custom pass to be used during lowering. It is run after
+     * all other lowering passes. Can be used to verify properties of
+     * the lowered Stmt, instrument it with extra code, or otherwise
+     * modify it. The Func takes ownership of the pass, and will call
+     * delete on it when the Func goes out of scope. So don't pass a
+     * stack object, or share pass instances between multiple
+     * Funcs. */
+    template<typename T>
+    void add_custom_lowering_pass(T *pass) {
+        // Template instantiate a custom deleter for this type, then
+        // cast it to a deleter that takes a IRMutator *. The custom
+        // deleter lives in user code, so that deletion is on the same
+        // heap as construction (I hate Windows).
+        void (*deleter)(Internal::IRMutator *) =
+            (void (*)(Internal::IRMutator *))(&delete_lowering_pass<T>);
+        add_custom_lowering_pass(pass, deleter);
+    }
+
+    /** Add a custom pass to be used during lowering, with the
+     * function that will be called to delete it also passed in. Set
+     * it to NULL if you wish to retain ownership of the object. */
+    EXPORT void add_custom_lowering_pass(Internal::IRMutator *pass, void (*deleter)(Internal::IRMutator *));
+
+    /** Remove all previously-set custom lowering passes */
+    EXPORT void clear_custom_lowering_passes();
 
     /** When this function is compiled, include code that dumps its
      * values to a file after it is realized, for the purpose of
@@ -726,33 +872,33 @@ public:
     /** Does this function have at least a pure definition. */
     EXPORT bool defined() const;
 
-    /** Get the left-hand-side of the reduction definition. An empty
-     * vector if there's no reduction definition. If there are
-     * multiple reduction definitions for this function, use the
+    /** Get the left-hand-side of the update definition. An empty
+     * vector if there's no update definition. If there are
+     * multiple update definitions for this function, use the
      * argument to select which one you want. */
-    EXPORT const std::vector<Expr> &reduction_args(int idx = 0) const;
+    EXPORT const std::vector<Expr> &update_args(int idx = 0) const;
 
-    /** Get the right-hand-side of a reduction definition. An error if
-     * there's no reduction definition. If there are multiple
-     * reduction definitions for this function, use the argument to
+    /** Get the right-hand-side of an update definition. An error if
+     * there's no update definition. If there are multiple
+     * update definitions for this function, use the argument to
      * select which one you want. */
-    EXPORT Expr reduction_value(int idx = 0) const;
+    EXPORT Expr update_value(int idx = 0) const;
 
-    /** Get the right-hand-side of a reduction definition for
+    /** Get the right-hand-side of an update definition for
      * functions that returns multiple values. An error if there's no
-     * reduction definition. Returns a Tuple with one element for
+     * update definition. Returns a Tuple with one element for
      * functions that return a single value. */
-    EXPORT Tuple reduction_values(int idx = 0) const;
+    EXPORT Tuple update_values(int idx = 0) const;
 
-    /** Get the reduction domain for a reduction definition. */
+    /** Get the reduction domain for an update definition, if there is
+     * one. */
     EXPORT RDom reduction_domain(int idx = 0) const;
 
-    /** Is this function a reduction (i.e. does it have at least one
-     * reduction definition)? */
-    EXPORT bool is_reduction() const;
+    /** Does this function have at least one update definition? */
+    EXPORT bool has_update_definition() const;
 
-    /** How many reduction definitions does this function have? */
-    EXPORT int num_reduction_definitions() const;
+    /** How many update definitions does this function have? */
+    EXPORT int num_update_definitions() const;
 
     /** Is this function an external stage? That is, was it defined
      * using define_extern? */
@@ -809,7 +955,7 @@ public:
     // @}
 
     /** Either calls to the function, or the left-hand-side of a
-     * reduction definition (see \ref RDom). If the function has
+     * update definition (see \ref RDom). If the function has
      * already been defined, and fewer arguments are given than the
      * function has dimensions, then enough implicit vars are added to
      * the end of the argument list to make up the difference. (see
@@ -1132,7 +1278,7 @@ public:
      * When cond is true, this is equivalent to g.compute_at(f,y).
      * When it is false, this is equivalent to g.compute_at(f,x).
      */
-    EXPORT ScheduleHandle specialize(Expr condition);
+    EXPORT Stage specialize(Expr condition);
 
     /** Tell Halide that the following dimensions correspond to GPU
      * thread indices. This is useful if you compute a producer
@@ -1141,16 +1287,16 @@ public:
      * threads. If the selected target is not an appropriate GPU, this
      * just marks those dimensions as parallel. */
     // @{
-    EXPORT Func &gpu_threads(VarOrRVar thread_x, GPUAPI gpu_api = GPU_Default);
-    EXPORT Func &gpu_threads(VarOrRVar thread_x, VarOrRVar thread_y, GPUAPI gpu_api = GPU_Default);
-    EXPORT Func &gpu_threads(VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z, GPUAPI gpu_api = GPU_Default);
+    EXPORT Func &gpu_threads(VarOrRVar thread_x, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Func &gpu_threads(VarOrRVar thread_x, VarOrRVar thread_y, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Func &gpu_threads(VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z, DeviceAPI device_api = DeviceAPI::Default_GPU);
     // @}
 
     /** Tell Halide to run this stage using a single gpu thread and
      * block. This is not an efficient use of your GPU, but it can be
      * useful to avoid copy-back for intermediate update stages that
      * touch a very small part of your Func. */
-    EXPORT Func &gpu_single_thread(GPUAPI gpu_api = GPU_Default);
+    EXPORT Func &gpu_single_thread(DeviceAPI device_api = DeviceAPI::Default_GPU);
 
     /** \deprecated Old name for #gpu_threads. */
     // @{
@@ -1170,9 +1316,9 @@ public:
      * run serially within each GPU block. If the selected target is
      * not ptx, this just marks those dimensions as parallel. */
     // @{
-    EXPORT Func &gpu_blocks(VarOrRVar block_x, GPUAPI gpu_api = GPU_Default);
-    EXPORT Func &gpu_blocks(VarOrRVar block_x, VarOrRVar block_y, GPUAPI gpu_api = GPU_Default);
-    EXPORT Func &gpu_blocks(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z, GPUAPI gpu_api = GPU_Default);
+    EXPORT Func &gpu_blocks(VarOrRVar block_x, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Func &gpu_blocks(VarOrRVar block_x, VarOrRVar block_y, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Func &gpu_blocks(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z, DeviceAPI device_api = DeviceAPI::Default_GPU);
     // @}
 
     /** \deprecated Old name for #gpu_blocks. */
@@ -1194,11 +1340,11 @@ public:
      * dimensions are consumed by this call, so do all other
      * unrolling, reordering, etc first. */
     // @{
-    EXPORT Func &gpu(VarOrRVar block_x, VarOrRVar thread_x, GPUAPI gpu_api = GPU_Default);
+    EXPORT Func &gpu(VarOrRVar block_x, VarOrRVar thread_x, DeviceAPI device_api = DeviceAPI::Default_GPU);
     EXPORT Func &gpu(VarOrRVar block_x, VarOrRVar block_y,
-		     VarOrRVar thread_x, VarOrRVar thread_y, GPUAPI gpu_api = GPU_Default);
+                     VarOrRVar thread_x, VarOrRVar thread_y, DeviceAPI device_api = DeviceAPI::Default_GPU);
     EXPORT Func &gpu(VarOrRVar block_x, VarOrRVar block_y, VarOrRVar block_z,
-                     VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z, GPUAPI gpu_api = GPU_Default);
+                     VarOrRVar thread_x, VarOrRVar thread_y, VarOrRVar thread_z, DeviceAPI device_api = DeviceAPI::Default_GPU);
     // @}
 
     /** \deprecated Old name for #gpu. */
@@ -1221,10 +1367,10 @@ public:
      * GPU thread indices. Consumes the variables given, so do all
      * other scheduling first. */
     // @{
-    EXPORT Func &gpu_tile(VarOrRVar x, int x_size, GPUAPI gpu_api = GPU_Default);
-    EXPORT Func &gpu_tile(VarOrRVar x, VarOrRVar y, int x_size, int y_size, GPUAPI gpu_api = GPU_Default);
+    EXPORT Func &gpu_tile(VarOrRVar x, int x_size, DeviceAPI device_api = DeviceAPI::Default_GPU);
+    EXPORT Func &gpu_tile(VarOrRVar x, VarOrRVar y, int x_size, int y_size, DeviceAPI device_api = DeviceAPI::Default_GPU);
     EXPORT Func &gpu_tile(VarOrRVar x, VarOrRVar y, VarOrRVar z,
-                          int x_size, int y_size, int z_size, GPUAPI gpu_api = GPU_Default);
+                          int x_size, int y_size, int z_size, DeviceAPI device_api = DeviceAPI::Default_GPU);
     // @}
 
     /** \deprecated Old name for #gpu_tile. */
@@ -1241,7 +1387,10 @@ public:
     }
     // @}
 
-    /** Scheduling for GLSL. */
+    /** Schedule for execution using GLSL. Conceptually, this is similar to
+     * parallelization over 'x' and 'y' (since GLSL shaders compute individual
+     * output pixels in parallel) and vectorization over 'c' (since GLSL
+     * implicitly vectorizes the color channel). */
     EXPORT Func &glsl(Var x, Var y, Var c);
 
     /** Specify how the storage for the function is laid out. These
@@ -1337,7 +1486,7 @@ public:
     EXPORT Func &compute_at(Func f, Var var);
 
     /** Schedule a function to be computed within the iteration over
-     * some dimension of a reduction domain. Produces equivalent code
+     * some dimension of an update domain. Produces equivalent code
      * to the version of compute_at that takes a Var. */
     EXPORT Func &compute_at(Func f, RVar var);
 
@@ -1377,6 +1526,13 @@ public:
      * allocates lots of temporary memory to store g.
      */
     EXPORT Func &compute_root();
+
+    /** Use the halide_memoization_cache_... interface to store a
+     *  computed version of this function across invocations of the
+     *  Func.
+     */
+    EXPORT Func &memoize();
+
 
     /** Allocate storage for this function within f's loop over
      * var. Scheduling storage is optional, and can be used to
@@ -1484,8 +1640,8 @@ public:
 
     /** Aggressively inline all uses of this function. This is the
      * default schedule, so you're unlikely to need to call this. For
-     * a reduction, that means it gets computed as close to the
-     * innermost loop as possible.
+     * a Func with an update definition, that means it gets computed
+     * as close to the innermost loop as possible.
      *
      * Consider once more the pipeline from \ref Func::compute_at :
      *
@@ -1509,10 +1665,9 @@ public:
      */
     EXPORT Func &compute_inline();
 
-    /** Get a handle on an update step of a reduction for the
-     * purposes of scheduling it. Only the pure dimensions of the
-     * update step can be meaningfully manipulated (see \ref RDom) */
-    EXPORT ScheduleHandle update(int idx = 0);
+    /** Get a handle on an update step for the purposes of scheduling
+     * it. */
+    EXPORT Stage update(int idx = 0);
 
     /** Trace all loads from this Func by emitting calls to
      * halide_trace. If the Func is inlined, this has no
@@ -1534,6 +1689,10 @@ public:
     Internal::Function function() const {
         return func;
     }
+
+    /** You can cast a Func to its pure stage for the purposes of
+     * scheduling it. */
+    operator Stage() const;
 
     /** Get a handle on the output buffer for this Func. Only relevant
      * if this is the output Func in a pipeline. Useful for making
@@ -1565,6 +1724,16 @@ public:
     operator ExternFuncArgument() const {
         return ExternFuncArgument(func);
     }
+
+    /** Infer the arguments to the Func, sorted into a canonical order:
+     * all buffers (sorted alphabetically by name), followed by all non-buffers
+     * (sorted alphabetically by name).
+     This lets you write things like:
+     \code
+     func.compile_to_assembly("/dev/stdout", func.infer_arguments());
+     \endcode
+     */
+    EXPORT std::vector<Argument> infer_arguments() const;
 
 };
 
@@ -1671,7 +1840,7 @@ NO_INLINE T evaluate_may_gpu(Expr e) {
     Func f;
     f() = e;
     if (has_gpu_feature) {
-	f.gpu_single_thread();
+        f.gpu_single_thread();
     }
     Image<T> im = f.realize();
     return im(0);
@@ -1695,7 +1864,7 @@ NO_INLINE void evaluate_may_gpu(Tuple t, A *a, B *b) {
     Func f;
     f() = t;
     if (has_gpu_feature) {
-	f.gpu_single_thread();
+        f.gpu_single_thread();
     }
     Realization r = f.realize();
     *a = Image<A>(r[0])(0);

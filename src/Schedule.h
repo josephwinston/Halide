@@ -5,7 +5,7 @@
  * Defines the internal representation of the schedule for a function
  */
 
-#include "IR.h"
+#include "Expr.h"
 #include <string>
 #include <vector>
 
@@ -86,7 +86,8 @@ struct Split {
 
 struct Dim {
     std::string var;
-    For::ForType for_type;
+    ForType for_type;
+    DeviceAPI device_api;
     bool pure;
 };
 
@@ -114,6 +115,12 @@ public:
     Schedule(IntrusivePtr<ScheduleContents> c) : contents(c) {}
     Schedule(const Schedule &other) : contents(other.contents) {}
     EXPORT Schedule();
+
+    /** This flag is set to true if the schedule is memoized. */
+    // @{
+    bool &memoized();
+    bool memoized() const;
+    // @}
 
     /** This flag is set to true if the dims list has been manipulated
      * by the user (or if a ScheduleHandle was created that could have

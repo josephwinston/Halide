@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <Halide.h>
+#include "Halide.h"
 #include "clock.h"
 
 using namespace Halide;
@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
         f(x) = a(x) + b(x);
         f.realize(c);
         assert(c(0) == (i+1)*17);
-    }    
+    }
 
     t2 = current_time();
     int elapsed = (int)(10.0 * (t2-t1));

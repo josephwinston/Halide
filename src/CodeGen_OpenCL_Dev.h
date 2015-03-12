@@ -22,7 +22,7 @@ public:
      * with different kernels, which will all be accumulated into a single
      * source module shared by a given Halide pipeline. */
     void add_kernel(Stmt stmt,
-                    std::string name,
+                    const std::string &name,
                     const std::vector<GPU_Argument> &args);
 
     /** (Re)initialize the GPU kernel module. This is separate from compile,
@@ -35,6 +35,10 @@ public:
     std::string get_current_kernel_name();
 
     void dump();
+    
+    virtual std::string print_gpu_name(const std::string &name);
+
+    std::string api_unique_name() { return "opencl"; }
 
 protected:
 
@@ -42,7 +46,7 @@ protected:
     public:
         CodeGen_OpenCL_C(std::ostream &s) : CodeGen_C(s) {}
         void add_kernel(Stmt stmt,
-                        std::string name,
+                        const std::string &name,
                         const std::vector<GPU_Argument> &args);
 
     protected:
@@ -52,6 +56,8 @@ protected:
 
         std::string get_memory_space(const std::string &);
 
+        void visit(const Div *);
+        void visit(const Mod *);
         void visit(const For *);
         void visit(const Ramp *op);
         void visit(const Broadcast *op);
